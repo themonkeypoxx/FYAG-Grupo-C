@@ -9,7 +9,8 @@ from django.conf import settings
 ## luego hacer las migraciones con python manage.py makemigrations y python manage.py migrate
 
 
-## AGREGADO: ESTO LO HICE DE PRUEBA, NO ES COMPLETAMENTE FIEL AL MODELO DEL INFORME (No hay relación con cliente, agregar)
+## AGREGADO: ESTO LO HICE DE PRUEBA, NO ES COMPLETAMENTE FIEL AL MODELO DEL INFORME (No hay relación con cliente)
+
 ## - Ismael, cualquier duda por whatsapp
 
 class TipoServicio(models.Model):

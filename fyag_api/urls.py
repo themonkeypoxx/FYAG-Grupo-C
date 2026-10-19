@@ -1,3 +1,5 @@
+from django.urls import include
+
 """
 URL configuration for fyag_api project.
 
@@ -19,4 +21,5 @@ from django.urls import path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('obras/', include('fichas_obras.urls')),
 ]
