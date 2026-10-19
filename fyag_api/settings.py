@@ -78,6 +78,10 @@ WSGI_APPLICATION = 'fyag_api.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+
+###Benjamín Escares debe configurar la bdd aquí (a parte de la por defecto)
+###Mientras tanto usaré esta por defecto para probar algunas cosas - Ismael !!!!!
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
