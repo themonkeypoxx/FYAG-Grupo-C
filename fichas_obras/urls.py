@@ -5,6 +5,7 @@ from fichas_obras import views
 
 #versionado de api
 router = routers.DefaultRouter()
+router.register("clientes", views.ClienteViewSet, basename="cliente")
 router.register(r'Obras', views.Crud_obras, 'obras')
 
 urlpatterns = [
