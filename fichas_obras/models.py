@@ -5,11 +5,9 @@ from django.conf import settings
 # Create your models here.
 ## HOLA
 ## Este es el CRUD solamente de obras, lo hice como prueba en SQLite3 (la base de datos q usa x defecto Django)
-## para cambiarlo a POSTGRESQL es fácil, solo hay que cambiar el bloque de database en fyag_apy/settings.py (línea 85)
-## luego hacer las migraciones con python manage.py makemigrations y python manage.py migrate
+## para cambiarlo a POSTGRESQL es fácil, solo hay que cambiar el bloque de database en fyag_api/settings.py (línea 85)
+## luego hacer las migraciones con python manage.py makemigrations | python manage.py migrate
 
-
-## AGREGADO: ESTO LO HICE DE PRUEBA, NO ES COMPLETAMENTE FIEL AL MODELO DEL INFORME (No hay relación con cliente)
 
 ## - Ismael, cualquier duda por whatsapp
 
@@ -40,12 +38,52 @@ class EstadoObra(models.Model):
     def __str__(self):
         return self.descripcion
 
+class Cliente(models.Model):
+    class EstadoCliente(models.TextChoices):
+        ACTIVO = "Activo", "Activo"
+        INACTIVO = "Inactivo", "Inactivo"
+        MOROSO = "Moroso", "Moroso"
 
+    id_cliente = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    rut_empresa = models.CharField(max_length=12, unique=True)
+    razon_social = models.CharField(max_length=150)
+    giro_comercial = models.CharField(max_length=150, blank=True)
+
+    direccion_matriz = models.CharField(max_length=255, blank=True)
+    comuna = models.CharField(max_length=100, blank=True)
+    ciudad = models.CharField(max_length=100, blank=True)
+
+    contacto_nombre = models.CharField(max_length=150, blank=True)
+    contacto_telefono = models.CharField(max_length=30, blank=True)
+    contacto_email = models.EmailField(max_length=150, blank=True)
+
+    estado_cliente = models.CharField(
+        max_length=20,
+        choices=EstadoCliente.choices,
+        default=EstadoCliente.ACTIVO,
+    )
+    soft_deleted = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "cliente"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(estado_cliente__in=["Activo", "Inactivo", "Moroso"]),
+                name="cliente_estado_valido",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.razon_social} ({self.rut_empresa})"
 
 class Obra(models.Model):
     id_obra = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     codigo_obra = models.CharField(max_length=30, unique=True)
-
+    
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.PROTECT,
+        db_column="id_cliente", related_name="obras",
+    )
     tipo_servicio = models.ForeignKey(
         TipoServicio, on_delete=models.PROTECT,
         db_column="id_tipo_servicio", related_name="obras",
@@ -58,6 +96,7 @@ class Obra(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         db_column="id_supervisor", related_name="obras_supervisadas",
     )
+
 
     nombre_obra = models.CharField(max_length=200)
     ubicacion_faena = models.CharField(max_length=255)
@@ -84,4 +123,7 @@ class Obra(models.Model):
 
     def __str__(self):
         return f"{self.codigo_obra} - {self.nombre_obra}"
+
+
+
 
