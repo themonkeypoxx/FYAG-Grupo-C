@@ -3,7 +3,6 @@
 
 
 ## Setup
-e_mod5
 
 1. Crear y activar ambiente:
    ```bash
