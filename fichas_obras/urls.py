@@ -1,12 +1,14 @@
 #Estas son las rutas q va a consultar el frontend !!!!!! - Ismael
 from django.urls import path, include
 from rest_framework import routers
-from fichas_obras import views
+from .views import *
 
 #versionado de api
 router = routers.DefaultRouter()
-router.register("clientes", views.ClienteViewSet, basename="cliente")
-router.register(r'Obras', views.Crud_obras, 'obras')
+router.register("clientes", ClienteViewSet, basename="cliente")
+router.register("obras", Crud_obras, basename="obra")
+router.register("tipos-servicio", TipoServicioViewSet, basename="tipo-servicio")
+router.register("estados-obra", EstadoObraViewSet, basename="estado-obra")
 
 urlpatterns = [
     path("fyag/v1/", include(router.urls))
