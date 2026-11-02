@@ -25,3 +25,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+#Ismael 02-11
+.venv
+*.sqlite3
+__pycache__
+

@@ -140,3 +140,13 @@ MAILERS = {
 # RECORDAR: Cuando pasemos el proyecto a un entorno online (Render + Supabase) Probablemente haya q reconfigurar esto
 # -Ismael 
 CORS_ALLOWED_ORIGINS = []
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+}
