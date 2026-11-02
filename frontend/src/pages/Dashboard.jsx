@@ -1,0 +1,261 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import ClasificacionServicios from '../components/ClasificacionServicios';
+import ObraCard from '../components/ObraCard';
+import ModalCambiarEstado from '../components/ModalCambiarEstado';
+import obrasService from '../Servicios/obrasService';
+
+export default function Dashboard() {
+  const [obras, setObras] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Filtros
+  const [tipoSeleccionado, setTipoSeleccionado] = useState('TODOS');
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState('TODOS');
+  const [busqueda, setBusqueda] = useState('');
+
+  // Estadísticas
+  const [conteoPorTipo, setConteoPorTipo] = useState({});
+  const [totalObras, setTotalObras] = useState(0);
+
+  // Modal de transición
+  const [modalData, setModalData] = useState({
+    isOpen: false,
+    obra: null,
+    transicion: null,
+  });
+  const [cargandoTransicion, setCargandoTransicion] = useState(false);
+  const [notificacion, setNotificacion] = useState(null);
+
+  // Cargar resumen de tipos para las estadísticas y contadores
+  const cargarResumenTipos = async () => {
+    try {
+      const data = await obrasService.getResumenTipos();
+      const conteos = {};
+      (data.clasificacion || []).forEach((item) => {
+        conteos[item.codigo] = item.cantidad_obras;
+      });
+      setConteoPorTipo(conteos);
+      setTotalObras(data.total_obras || 0);
+    } catch (err) {
+      console.error('Error al cargar resumen de tipos:', err);
+    }
+  };
+
+  // Cargar lista de obras según los filtros activos
+  const cargarObras = useCallback(async () => {
+    try {
+      setCargando(true);
+      setError(null);
+      const data = await obrasService.getObras({
+        tipo_servicio_codigo: tipoSeleccionado,
+        estado_codigo: estadoSeleccionado,
+        search: busqueda,
+      });
+      setObras(data);
+    } catch (err) {
+      console.error('Error al cargar obras:', err);
+      setError('No se pudo conectar con el servidor backend (Django). Asegúrate de que esté corriendo.');
+    } finally {
+      setCargando(false);
+    }
+  }, [tipoSeleccionado, estadoSeleccionado, busqueda]);
+
+  useEffect(() => {
+    cargarResumenTipos();
+  }, []);
+
+  useEffect(() => {
+    cargarObras();
+  }, [cargarObras]);
+
+  // Manejar solicitud de transición
+  const handleSolicitarTransicion = (obra, transicion) => {
+    // Si no requiere motivo ni es finalizada (ej. PENDIENTE -> EJECUCION), podemos abrir modal o ejecutar directo
+    // Pero el modal da confirmación clara y seguridad
+    setModalData({
+      isOpen: true,
+      obra,
+      transicion,
+    });
+  };
+
+  // Confirmar y aplicar la transición
+  const handleConfirmarTransicion = async (nuevoEstadoCodigo, motivo) => {
+    if (!modalData.obra) return;
+    try {
+      setCargandoTransicion(true);
+      const res = await obrasService.cambiarEstado(
+        modalData.obra.id_obra,
+        nuevoEstadoCodigo,
+        motivo
+      );
+
+      setNotificacion({
+        tipo: 'exito',
+        mensaje: res.mensaje || 'Estado actualizado con éxito.',
+      });
+
+      setModalData({ isOpen: false, obra: null, transicion: null });
+      // Recargar lista y resumen
+      await Promise.all([cargarObras(), cargarResumenTipos()]);
+    } catch (err) {
+      console.error('Error al cambiar estado:', err);
+      const errorMsg =
+        err.response?.data?.error ||
+        'Error inesperado al intentar cambiar el estado.';
+      setNotificacion({
+        tipo: 'error',
+        mensaje: errorMsg,
+      });
+    } finally {
+      setCargandoTransicion(false);
+      setTimeout(() => setNotificacion(null), 5000);
+    }
+  };
+
+  return (
+    <div>
+      {/* Notificación flotante */}
+      {notificacion && (
+        <div
+          style={{
+            marginBottom: '1.25rem',
+            padding: '0.85rem 1.25rem',
+            borderRadius: '8px',
+            backgroundColor:
+              notificacion.tipo === 'exito' ? 'var(--estado-finalizada-bg)' : 'var(--estado-cancelada-bg)',
+            color:
+              notificacion.tipo === 'exito' ? 'var(--estado-finalizada)' : 'var(--estado-cancelada)',
+            border: `1px solid ${
+              notificacion.tipo === 'exito' ? '#bbf7d0' : '#fecaca'
+            }`,
+            fontWeight: 600,
+            fontSize: '0.9rem',
+          }}
+        >
+          {notificacion.tipo === 'exito' ? '✅' : '❌'} {notificacion.mensaje}
+        </div>
+      )}
+
+      {/* 1. Barra de Clasificación por Tipo de Servicio */}
+      <ClasificacionServicios
+        tipoSeleccionado={tipoSeleccionado}
+        onSeleccionarTipo={setTipoSeleccionado}
+        conteoPorTipo={conteoPorTipo}
+        totalObras={totalObras}
+      />
+
+      {/* 2. Filtros secundarios y Búsqueda */}
+      <div className="filters-row">
+        <div className="search-box">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="🔍 Buscar por código, faena, cliente o ubicación..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+
+        <div className="estado-filter">
+          <label htmlFor="estado-select" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+            Estado operativo:
+          </label>
+          <select
+            id="estado-select"
+            className="estado-select"
+            value={estadoSeleccionado}
+            onChange={(e) => setEstadoSeleccionado(e.target.value)}
+          >
+            <option value="TODOS">Todos los estados</option>
+            <option value="PENDIENTE">Pendientes</option>
+            <option value="EJECUCION">En Ejecución</option>
+            <option value="SUSPENDIDA">Suspendidas</option>
+            <option value="FINALIZADA">Finalizadas</option>
+            <option value="CANCELADA">Canceladas</option>
+          </select>
+        </div>
+      </div>
+
+      {/* 3. Listado de Fichas de Obra */}
+      {cargando ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+          Cargando fichas de obras...
+        </div>
+      ) : error ? (
+        <div
+          style={{
+            padding: '2rem',
+            textAlign: 'center',
+            backgroundColor: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: '12px',
+          }}
+        >
+          <p style={{ color: 'var(--estado-cancelada)', fontWeight: 600, marginBottom: '0.5rem' }}>
+            {error}
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => {
+              cargarResumenTipos();
+              cargarObras();
+            }}
+          >
+            Reintentar Conexión
+          </button>
+        </div>
+      ) : obras.length === 0 ? (
+        <div
+          style={{
+            padding: '3rem',
+            textAlign: 'center',
+            backgroundColor: 'var(--surface)',
+            border: '1px dashed var(--border)',
+            borderRadius: '12px',
+          }}
+        >
+          <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            No se encontraron obras para los filtros seleccionados.
+          </p>
+          {(tipoSeleccionado !== 'TODOS' || estadoSeleccionado !== 'TODOS' || busqueda) && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setTipoSeleccionado('TODOS');
+                setEstadoSeleccionado('TODOS');
+                setBusqueda('');
+              }}
+            >
+              Restablecer filtros
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="obras-grid">
+          {obras.map((obra) => (
+            <ObraCard
+              key={obra.id_obra}
+              obra={obra}
+              onSolicitarTransicion={handleSolicitarTransicion}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Modal de Transición de Estados Operativos */}
+      <ModalCambiarEstado
+        isOpen={modalData.isOpen}
+        obra={modalData.obra}
+        transicion={modalData.transicion}
+        cargando={cargandoTransicion}
+        onClose={() => setModalData({ isOpen: false, obra: null, transicion: null })}
+        onConfirmar={handleConfirmarTransicion}
+      />
+    </div>
+  );
+}
+
