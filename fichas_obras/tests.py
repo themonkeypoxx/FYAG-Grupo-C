@@ -159,3 +159,59 @@ class TransicionEstadosYClasificacionTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("total_obras", res.data)
         self.assertIn("clasificacion", res.data)
+
+
+# --- Pruebas de Creación Básica y Clasificación  ---
+
+class CreacionYClasificacionObrasTests(TestCase):
+    def setUp(self):
+        self.supervisor = User.objects.create_user(
+            username="supervisor_Juan",
+            first_name="Juan",
+            last_name="Gonzales",
+        )
+        self.cliente = Cliente.objects.create(
+            rut_empresa="76432190-K",
+            razon_social="Agrícola San Carlos SpA",
+            ciudad="Chillán"
+        )
+        self.estado_pendiente = EstadoObra.objects.get_or_create(
+            codigo_estado="PENDIENTE", defaults={"descripcion": "Pendiente"}
+        )[0]
+        self.tipo_clima = TipoServicio.objects.get_or_create(
+            codigo="CLIMATIZACION", defaults={"nombre_servicio": "Climatización"}
+        )[0]
+        self.tipo_mantencion = TipoServicio.objects.get_or_create(
+            codigo="MANTENCION", defaults={"nombre_servicio": "Mantención"}
+        )[0]
+
+    def test_creacion_obra_correcta(self):
+        """Verifica la creación exitosa de una obra con estado PENDIENTE por defecto."""
+        obra = Obra.objects.create(
+            codigo_obra="OBRA-TEST-001",
+            nombre_obra="Instalación Cámara Frigorífica",
+            ubicacion_faena="Chillán",
+            fecha_inicio=date(2026, 3, 1),
+            cliente=self.cliente,
+            tipo_servicio=self.tipo_clima,
+            estado_obra=self.estado_pendiente,
+            supervisor=self.supervisor,
+            costo_estimado=4500000.00
+        )
+        self.assertEqual(obra.codigo_obra, "OBRA-TEST-001")
+        self.assertEqual(obra.estado_obra.codigo_estado, "PENDIENTE")
+        self.assertEqual(obra.tipo_servicio.nombre_servicio, "Climatización")
+
+    def test_clasificacion_obra_por_tipo_servicio(self):
+        """Verifica la vinculación correcta al tipo de servicio de mantención."""
+        obra = Obra.objects.create(
+            codigo_obra="OBRA-TEST-002",
+            nombre_obra="Mantención Preventiva Chiller",
+            ubicacion_faena="Chillán Viejo",
+            fecha_inicio=date(2026, 3, 5),
+            cliente=self.cliente,
+            tipo_servicio=self.tipo_mantencion,
+            estado_obra=self.estado_pendiente,
+            supervisor=self.supervisor
+        )
+        self.assertEqual(obra.tipo_servicio.codigo, "MANTENCION")
