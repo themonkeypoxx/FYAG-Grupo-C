@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import obrasService from '../Servicios/obrasService';
 
+
 export default function NuevaObra() {
   const navigate = useNavigate();
 
@@ -75,6 +76,25 @@ export default function NuevaObra() {
       return;
     }
 
+    if (
+  formData.fecha_termino_estimada &&
+  formData.fecha_termino_estimada <= formData.fecha_inicio
+) {
+  setError('La fecha de término debe ser posterior a la fecha de inicio.');
+  return;
+}
+
+const estadoPendiente = estados.find(
+  (estado) => estado.codigo_estado === 'PENDIENTE'
+);
+
+
+if (!estadoPendiente) {
+  setError('No se encontró el estado Pendiente.');
+  return;
+}
+
+
     try {
       setGuardando(true);
       setError(null);
@@ -86,7 +106,7 @@ export default function NuevaObra() {
         ubicacion_faena: formData.ubicacion_faena,
         cliente: formData.id_cliente,
         tipo_servicio: parseInt(formData.id_tipo_servicio, 10),
-        estado_obra: parseInt(formData.id_estado_obra, 10),
+        estado_obra: parseInt(estadoPendiente.id_estado_obra, 10),
         supervisor: 1, // Supervisor predeterminado
         fecha_inicio: formData.fecha_inicio,
         fecha_termino_estimada: formData.fecha_termino_estimada || null,
@@ -94,7 +114,15 @@ export default function NuevaObra() {
       };
 
       await obrasService.crearObra(payload);
-      navigate('/');
+
+navigate('/', {
+  state: {
+    notificacion: {
+      tipo: 'exito',
+      mensaje: '¡Obra creada exitosamente! La ficha se registró correctamente.',
+    },
+  },
+});
     } catch (err) {
       console.error('Error al guardar obra:', err);
       const msg =
@@ -267,6 +295,7 @@ export default function NuevaObra() {
               className="form-control"
               value={formData.id_estado_obra}
               onChange={handleChange}
+              disabled
             >
               {estados.map((e) => (
                 <option key={e.id_estado_obra} value={e.id_estado_obra}>

@@ -1,24 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ClasificacionServicios from '../components/ClasificacionServicios';
 import ObraCard from '../components/ObraCard';
 import ModalCambiarEstado from '../components/ModalCambiarEstado';
 import obrasService from '../Servicios/obrasService';
 
 export default function Dashboard() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [obras, setObras] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filtros
+  
   const [tipoSeleccionado, setTipoSeleccionado] = useState('TODOS');
   const [estadoSeleccionado, setEstadoSeleccionado] = useState('TODOS');
   const [busqueda, setBusqueda] = useState('');
 
-  // Estadísticas
+  
   const [conteoPorTipo, setConteoPorTipo] = useState({});
   const [totalObras, setTotalObras] = useState(0);
 
-  // Modal de transición
+  
   const [modalData, setModalData] = useState({
     isOpen: false,
     obra: null,
@@ -27,7 +30,33 @@ export default function Dashboard() {
   const [cargandoTransicion, setCargandoTransicion] = useState(false);
   const [notificacion, setNotificacion] = useState(null);
 
-  // Cargar resumen de tipos para las estadísticas y contadores
+  
+useEffect(() => {
+  const notificacionRecibida = location.state?.notificacion;
+
+  if (!notificacionRecibida) return;
+
+  setNotificacion(notificacionRecibida);
+
+  
+  navigate(location.pathname, {
+    replace: true,
+    state: null,
+  });
+}, [location.state, location.pathname, navigate]);
+
+
+useEffect(() => {
+  if (!notificacion) return;
+
+  const temporizador = setTimeout(() => {
+    setNotificacion(null);
+  }, 5000);
+
+  return () => clearTimeout(temporizador);
+}, [notificacion]);
+
+ 
   const cargarResumenTipos = async () => {
     try {
       const data = await obrasService.getResumenTipos();
@@ -42,7 +71,7 @@ export default function Dashboard() {
     }
   };
 
-  // Cargar lista de obras según los filtros activos
+  
   const cargarObras = useCallback(async () => {
     try {
       setCargando(true);
@@ -69,10 +98,9 @@ export default function Dashboard() {
     cargarObras();
   }, [cargarObras]);
 
-  // Manejar solicitud de transición
+
   const handleSolicitarTransicion = (obra, transicion) => {
-    // Si no requiere motivo ni es finalizada (ej. PENDIENTE -> EJECUCION), podemos abrir modal o ejecutar directo
-    // Pero el modal da confirmación clara y seguridad
+   
     setModalData({
       isOpen: true,
       obra,
@@ -80,7 +108,7 @@ export default function Dashboard() {
     });
   };
 
-  // Confirmar y aplicar la transición
+
   const handleConfirmarTransicion = async (nuevoEstadoCodigo, motivo) => {
     if (!modalData.obra) return;
     try {
@@ -97,7 +125,7 @@ export default function Dashboard() {
       });
 
       setModalData({ isOpen: false, obra: null, transicion: null });
-      // Recargar lista y resumen
+    
       await Promise.all([cargarObras(), cargarResumenTipos()]);
     } catch (err) {
       console.error('Error al cambiar estado:', err);
@@ -109,9 +137,8 @@ export default function Dashboard() {
         mensaje: errorMsg,
       });
     } finally {
-      setCargandoTransicion(false);
-      setTimeout(() => setNotificacion(null), 5000);
-    }
+  setCargandoTransicion(false);
+}
   };
 
   return (
@@ -134,7 +161,7 @@ export default function Dashboard() {
             fontSize: '0.9rem',
           }}
         >
-          {notificacion.tipo === 'exito' ? '✅' : '❌'} {notificacion.mensaje}
+        {notificacion.mensaje}
         </div>
       )}
 
