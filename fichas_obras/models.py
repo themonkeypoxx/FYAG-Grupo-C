@@ -11,6 +11,30 @@ from django.conf import settings
 
 ## - Ismael, cualquier duda por whatsapp
 
+class Rol(models.Model):
+    GERENCIA = 'GERENCIA'
+    ADMINISTRATIVO = 'ADMINISTRATIVO'
+    SUPERVISOR = 'SUPERVISOR'
+    TECNICO = 'TECNICO'
+
+    ROLES_CHOICES = [
+        (GERENCIA, 'Gerencia / Administrador'),
+        (ADMINISTRATIVO, 'Administrativo / Finanzas'),
+        (SUPERVISOR, 'Supervisor/a de Obras'),
+        (TECNICO, 'Técnico en Terreno'),
+    ]
+
+    id_rol = models.AutoField(primary_key=True)
+    nombre_rol = models.CharField(max_length=50, unique=True, choices=ROLES_CHOICES)
+    descripcion = models.CharField(max_length=200, blank=True, null=True)
+    nivel_jerarquia = models.IntegerField(help_text="1: Gerencia, 2: Finanzas, 3: Supervisor, 4: Técnico")
+
+    class Meta:
+        db_table = 'rol'
+
+    def __str__(self):
+        return f"{self.nombre_rol} (Nivel {self.nivel_jerarquia})"
+
 class TipoServicio(models.Model):
     id_tipo_servicio = models.AutoField(primary_key=True) 
     codigo = models.CharField(max_length=20, unique=True)
