@@ -31,11 +31,11 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
 ## Se supone q el portal del técnico es parte del sprint 5, 
 # igual dejé configurado esto desde ya
-class ObrasAsignadasViewSet(viewsets.ModelViewSet):
+class ObrasAsignadasViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [EsGerencial | EsTecnico | EsSupervisor]
-    def getqueryset(self):
+    def get_queryset(self):
         #se configura el queryset para que de todos los elementos solo si es gerente o supervisor
-        if self.request.user.groups.filter(name='Gerencial').exists() or self.request.user.groups.filter(name='Supervisor').exists:
+        if self.request.user.groups.filter(name='Gerencial').exists() or self.request.user.groups.filter(name='Supervisor').exists():
             return Obra.objects.all()
         
         return Obra.objects.filter(tecnicos_asignados = self.request.user)

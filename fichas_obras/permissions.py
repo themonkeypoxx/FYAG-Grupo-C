@@ -17,6 +17,6 @@ class EsRol(BasePermission):
             and request.user.groups.filter(name=self.rol_requerido).exists()
         )
 class EsGerencial(EsRol): rol_requerido = "Gerencial"
-class Supervisor(EsRol): rol_requerido = "Supervisor"
+class EsSupervisor(EsRol): rol_requerido = "Supervisor"
 class EsAdministrativo(EsRol): rol_requerido = "Administrativo"
 class EsTecnico(EsRol): rol_requerido = "Tecnico"
