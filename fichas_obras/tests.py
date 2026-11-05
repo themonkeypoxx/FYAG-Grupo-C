@@ -1,6 +1,7 @@
 from datetime import date
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -215,3 +216,110 @@ class CreacionYClasificacionObrasTests(TestCase):
             supervisor=self.supervisor
         )
         self.assertEqual(obra.tipo_servicio.codigo, "MANTENCION")
+
+
+# --- Pruebas de endpoints JWT (Login / Refresh) ---
+
+class JWTAuthEndpointsTests(TestCase):
+    """
+    Pruebas sintéticas para los endpoints agregados en la rama
+    'Configurar-los-endpoints-de-Login-Refresh':
+      - POST /api/auth/login/   → TokenObtainPairView
+      - POST /api/auth/refresh/ → TokenRefreshView
+    """
+
+    LOGIN_URL   = "/api/auth/login/"
+    REFRESH_URL = "/api/auth/refresh/"
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="test_jwt_user",
+            password="Contrasena_Segura_123",
+        )
+
+    # ── Login ────────────────────────────────────────────────────────────────
+
+    def test_login_credenciales_correctas_devuelve_tokens(self):
+        """Login con credenciales válidas retorna access y refresh tokens."""
+        res = self.client.post(
+            self.LOGIN_URL,
+            {"username": "test_jwt_user", "password": "Contrasena_Segura_123"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("access", res.data)
+        self.assertIn("refresh", res.data)
+        # Los tokens no deben estar vacíos
+        self.assertTrue(len(res.data["access"]) > 20)
+        self.assertTrue(len(res.data["refresh"]) > 20)
+
+    def test_login_password_incorrecta_retorna_401(self):
+        """Login con password errónea debe retornar 401."""
+        res = self.client.post(
+            self.LOGIN_URL,
+            {"username": "test_jwt_user", "password": "password_incorrecta"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotIn("access", res.data)
+
+    def test_login_usuario_inexistente_retorna_401(self):
+        """Login con usuario que no existe debe retornar 401."""
+        res = self.client.post(
+            self.LOGIN_URL,
+            {"username": "nadie", "password": "cualquier"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_sin_campos_retorna_400(self):
+        """Login sin enviar username ni password debe retornar 400."""
+        res = self.client.post(self.LOGIN_URL, {}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_login_solo_acepta_post(self):
+        """El endpoint de login no debe aceptar GET."""
+        res = self.client.get(self.LOGIN_URL)
+        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    # ── Refresh ───────────────────────────────────────────────────────────────
+
+    def test_refresh_con_token_valido_devuelve_nuevo_access(self):
+        """Refresh con un refresh token válido devuelve un nuevo access token."""
+        # Primero hacemos login para obtener el refresh token
+        login_res = self.client.post(
+            self.LOGIN_URL,
+            {"username": "test_jwt_user", "password": "Contrasena_Segura_123"},
+            format="json",
+        )
+        refresh_token = login_res.data["refresh"]
+
+        # Ahora usamos ese refresh token
+        res = self.client.post(
+            self.REFRESH_URL,
+            {"refresh": refresh_token},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("access", res.data)
+        self.assertTrue(len(res.data["access"]) > 20)
+
+    def test_refresh_con_token_invalido_retorna_401(self):
+        """Refresh con un token inventado debe retornar 401."""
+        res = self.client.post(
+            self.REFRESH_URL,
+            {"refresh": "esto.no.es.un.token.valido"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_refresh_sin_token_retorna_400(self):
+        """Refresh sin enviar el campo refresh debe retornar 400."""
+        res = self.client.post(self.REFRESH_URL, {}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_refresh_solo_acepta_post(self):
+        """El endpoint de refresh no debe aceptar GET."""
+        res = self.client.get(self.REFRESH_URL)
+        self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
