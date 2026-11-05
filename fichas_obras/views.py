@@ -3,6 +3,10 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializer import CustomTokenObtainPairSerializer
+
 from .models import Cliente, EstadoObra, Obra, TipoServicio
 from .permissions import EsGerencia, EsSupervisor
 from .serializer import (
@@ -204,3 +208,7 @@ class ObrasAsignadasViewSet(viewsets.ReadOnlyModelViewSet):
             return Obra.objects.all()
         
         return Obra.objects.filter(tecnicos_asignados = self.request.user)
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer

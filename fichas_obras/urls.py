@@ -15,4 +15,15 @@ urlpatterns = [
     path("fyag/v1/", include(router.urls))
 ]
 
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    
+    # Rutas de Autenticación JWT
+
+
+    # Tus otras rutas (fichas_obras, etc.)
+    path('api/', include('fichas_obras.urls')),
+]
+
 ## esto solito ya genera todos los GET, POST, PUT Y DELETE PARA LAS OBRAS
