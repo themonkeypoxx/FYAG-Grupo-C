@@ -8,7 +8,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializer import CustomTokenObtainPairSerializer
 
 from .models import Cliente, EstadoObra, Obra, TipoServicio
-from .permissions import EsGerencia, EsSupervisor
+from .permissions import EsGerencial, EsSupervisor, EsAdministrativo, EsTecnico 
+#x alguna razon faltaba el import de los demas grupos y solo estaban EsSupervisor y Gerencial *raro
 from .serializer import (
     ClienteSerializer,
     EstadoObra_Serializer,
