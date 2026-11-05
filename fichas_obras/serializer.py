@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import *
 from .validators import validar_rut
 from .services import obtener_transiciones_posibles, validar_transicion_estado
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 # Serializador de Tipos de Servicio (Mantención, Climatización, Proyecto eléctrico, Emergencia, Garantía, Proyecto)
 class TipoServ_Serializer(serializers.ModelSerializer):
@@ -94,3 +95,26 @@ class Obras_Serializer(serializers.ModelSerializer):
                     motivo=motivo
                 )
         return attrs
+
+
+
+###VOY A DEJAR COMENTARIOS PARA ENTENDERLO BIEN DPS -I !!!!
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        #se obtiene el token estandar
+        token = super().get_token(user)
+        #arega claims personalizados DENTRO del token JWT 
+        token['username'] = user.username
+        token['email'] = user.email
+        #se obtienen la lista de nombres de los grupos/roles del usuario
+        token['roles'] = list(user.groups.values_list('name', flat=True))
+        return token
+    def validate(self, attrs):
+        #esto personaliza lo que devuelve la respuesta JSON directa al hacer POST
+        data = super().validate(attrs)
+        #agregamos datos del usuario en la respuesta JSON para que el frontend (react) los pueda leer
+        data['username'] = self.user.username
+        data['email'] = self.user.email
+        data['roles'] = list(self.user.groups.values_list('name', flat=True))
+        return data

@@ -18,11 +18,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+# ahora si lo arregle bien... lo habia puesto en el otro archivo ;( -Ismael
+# es para usar el custom token obtain en lugar del q viene x defecto en drf!!!!
+from fichas_obras.views import CustomTokenObtainPairView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('obras/', include('fichas_obras.urls')),
 ]
+#
