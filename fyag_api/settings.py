@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-43a+$9)kq-ej(o=0e%%5jmfh7+q%a4g+2w2y9+pbx$)78zs22y
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'testserver', '*']
 
 
 # Application definition
@@ -139,7 +139,13 @@ MAILERS = {
 # Esto es para los servers autorizados x cors !! Asi puede conectarse django con el React
 # RECORDAR: Cuando pasemos el proyecto a un entorno online (Render + Supabase) Probablemente haya q reconfigurar esto
 # -Ismael 
-CORS_ALLOWED_ORIGINS = []
+
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_CREDENTIALS = True
 
 
 REST_FRAMEWORK = {
