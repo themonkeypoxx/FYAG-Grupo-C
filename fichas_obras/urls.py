@@ -9,6 +9,7 @@ router.register("clientes", ClienteViewSet, basename="cliente")
 router.register("obras", Crud_obras, basename="obra")
 router.register("tipos-servicio", TipoServicioViewSet, basename="tipo-servicio")
 router.register("estados-obra", EstadoObraViewSet, basename="estado-obra")
+router.register("obras-asignadas", ObrasAsignadasViewSet, basename= "obras-asignadas")
 
 urlpatterns = [
     path("fyag/v1/", include(router.urls))

@@ -139,9 +139,20 @@ MAILERS = {
 # Esto es para los servers autorizados x cors !! Asi puede conectarse django con el React
 # RECORDAR: Cuando pasemos el proyecto a un entorno online (Render + Supabase) Probablemente haya q reconfigurar esto
 # -Ismael 
+
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+}

@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .models import Cliente, EstadoObra, Obra, TipoServicio
+from .permissions import EsGerencia, EsSupervisor
 from .serializer import (
     ClienteSerializer,
     EstadoObra_Serializer,
@@ -12,8 +13,8 @@ from .serializer import (
 )
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
-
 class Crud_obras(viewsets.ModelViewSet):
+    permission_classes = [EsGerencial | EsSupervisor]
     """
     CRUD principal de Obras con clasificación por tipo de servicio,
     búsqueda, filtros y máquina de estados operativos.
@@ -177,15 +178,29 @@ class Crud_obras(viewsets.ModelViewSet):
 
 
 class TipoServicioViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [EsGerencial | EsAdministrativo]
     queryset = TipoServicio.objects.all().order_by("nombre_servicio")
     serializer_class = TipoServ_Serializer
 
 
 class EstadoObraViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = EstadoObra.objects.all()
+    permission_classes = [EsGerencial | EsSupervisor]
     serializer_class = EstadoObra_Serializer
 
 
 class ClienteViewSet(viewsets.ModelViewSet):
+    permission_classes = [EsGerencial | EsSupervisor]
     queryset = Cliente.objects.all().order_by("razon_social")
     serializer_class = ClienteSerializer
+
+## Se supone q el portal del técnico es parte del sprint 5, 
+# igual dejé configurado esto desde ya
+class ObrasAsignadasViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [EsGerencial | EsTecnico | EsSupervisor]
+    def get_queryset(self):
+        #se configura el queryset para que de todos los elementos solo si es gerente o supervisor
+        if self.request.user.groups.filter(name='Gerencial').exists() or self.request.user.groups.filter(name='Supervisor').exists():
+            return Obra.objects.all()
+        
+        return Obra.objects.filter(tecnicos_asignados = self.request.user)

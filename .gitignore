@@ -26,6 +26,11 @@ dist-ssr
 *.sln
 *.sw?
 
+#Ismael 02-11
+.venv
+*.sqlite3
+__pycache__
+
 # Python
 __pycache__/
 *.py[cod]
