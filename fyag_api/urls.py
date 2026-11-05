@@ -29,3 +29,4 @@ urlpatterns = [
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('obras/', include('fichas_obras.urls')),
 ]
+#
