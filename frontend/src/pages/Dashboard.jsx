@@ -11,17 +11,11 @@ export default function Dashboard() {
   const [obras, setObras] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
-
-  
   const [tipoSeleccionado, setTipoSeleccionado] = useState('TODOS');
   const [estadoSeleccionado, setEstadoSeleccionado] = useState('TODOS');
   const [busqueda, setBusqueda] = useState('');
-
-  
   const [conteoPorTipo, setConteoPorTipo] = useState({});
   const [totalObras, setTotalObras] = useState(0);
-
-  
   const [modalData, setModalData] = useState({
     isOpen: false,
     obra: null,
@@ -30,33 +24,30 @@ export default function Dashboard() {
   const [cargandoTransicion, setCargandoTransicion] = useState(false);
   const [notificacion, setNotificacion] = useState(null);
 
-  
-useEffect(() => {
-  const notificacionRecibida = location.state?.notificacion;
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    navigate('/login');
+  };
 
-  if (!notificacionRecibida) return;
+  useEffect(() => {
+    const notificacionRecibida = location.state?.notificacion;
+    if (!notificacionRecibida) return;
+    setNotificacion(notificacionRecibida);
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    });
+  }, [location.state, location.pathname, navigate]);
 
-  setNotificacion(notificacionRecibida);
+  useEffect(() => {
+    if (!notificacion) return;
+    const temporizador = setTimeout(() => {
+      setNotificacion(null);
+    }, 5000);
+    return () => clearTimeout(temporizador);
+  }, [notificacion]);
 
-  
-  navigate(location.pathname, {
-    replace: true,
-    state: null,
-  });
-}, [location.state, location.pathname, navigate]);
-
-
-useEffect(() => {
-  if (!notificacion) return;
-
-  const temporizador = setTimeout(() => {
-    setNotificacion(null);
-  }, 5000);
-
-  return () => clearTimeout(temporizador);
-}, [notificacion]);
-
- 
   const cargarResumenTipos = async () => {
     try {
       const data = await obrasService.getResumenTipos();
@@ -71,7 +62,6 @@ useEffect(() => {
     }
   };
 
-  
   const cargarObras = useCallback(async () => {
     try {
       setCargando(true);
@@ -98,16 +88,13 @@ useEffect(() => {
     cargarObras();
   }, [cargarObras]);
 
-
   const handleSolicitarTransicion = (obra, transicion) => {
-   
     setModalData({
       isOpen: true,
       obra,
       transicion,
     });
   };
-
 
   const handleConfirmarTransicion = async (nuevoEstadoCodigo, motivo) => {
     if (!modalData.obra) return;
@@ -118,14 +105,11 @@ useEffect(() => {
         nuevoEstadoCodigo,
         motivo
       );
-
       setNotificacion({
         tipo: 'exito',
         mensaje: res.mensaje || 'Estado actualizado con éxito.',
       });
-
       setModalData({ isOpen: false, obra: null, transicion: null });
-    
       await Promise.all([cargarObras(), cargarResumenTipos()]);
     } catch (err) {
       console.error('Error al cambiar estado:', err);
@@ -137,13 +121,21 @@ useEffect(() => {
         mensaje: errorMsg,
       });
     } finally {
-  setCargandoTransicion(false);
-}
+      setCargandoTransicion(false);
+    }
   };
 
   return (
     <div>
-      {/* Notificación flotante */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem', padding: '1rem 0' }}>
+        <button 
+          onClick={handleLogout} 
+          style={{ padding: '8px 16px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
+        >
+          Cerrar Sesión
+        </button>
+      </div>
+
       {notificacion && (
         <div
           style={{
@@ -165,7 +157,6 @@ useEffect(() => {
         </div>
       )}
 
-      {/* 1. Barra de Clasificación por Tipo de Servicio */}
       <ClasificacionServicios
         tipoSeleccionado={tipoSeleccionado}
         onSeleccionarTipo={setTipoSeleccionado}
@@ -173,7 +164,6 @@ useEffect(() => {
         totalObras={totalObras}
       />
 
-      {/* 2. Filtros secundarios y Búsqueda */}
       <div className="filters-row">
         <div className="search-box">
           <input
@@ -205,7 +195,6 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* 3. Listado de Fichas de Obra */}
       {cargando ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
           Cargando fichas de obras...
@@ -273,7 +262,6 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Modal de Transición de Estados Operativos */}
       <ModalCambiarEstado
         isOpen={modalData.isOpen}
         obra={modalData.obra}
@@ -285,4 +273,3 @@ useEffect(() => {
     </div>
   );
 }
-
