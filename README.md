@@ -1,16 +1,42 @@
-# React + Vite
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+   Windows:
+   ```powershell
+   .venv\Scripts\activate
+   ```
+3. Instalar dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Aplicar migraciones de BDD:
+   ```bash
+   python manage.py migrate
+   ```
+5. (opcional) crear superusuario:
+   ```bash
+   python manage.py createsuperuser
+   ```
+6. Correr el sv:
+   ```bash
+   python manage.py runserver
+   ```
+7. Visitar http://127.0.0.1:8000/
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+8. frond end (React):
+    ```bash
+   1. Entrar a la carpeta: "cd frontend"
+   2. Instalar dependencias: "npm install" #*Ya instaladas 1 vez, se puede saltar este paso*
+   3. Levantar servidor: "npm run dev"
+   4. Salir del servidor:"Ctrl + c"
+   5. Salir de la carpeta frondend en la termina: "cd .."
+   ```
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+ 9. Usuarios de prueba para cada módulo (Todos tienen la contraseña Prueba1234*):
+     ```bash
+   1. gerente_test@fyag.cl - username = gerente_test
+   2. supervisor_test@fyag.cl - username = supervisor_test 
+   3. admin_test@fyag.cl - username = admin_test
+   4. tecnico_test@fyag.cl - username = tecnico_test
+   ```
+ 
