@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NuevaObra from './pages/NuevaObra';
+import './App.css';
 
 function Layout() {
   const location = useLocation();
