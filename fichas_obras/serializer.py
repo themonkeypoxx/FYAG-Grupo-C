@@ -98,7 +98,7 @@ class Obras_Serializer(serializers.ModelSerializer):
 
 
 
-###VOY A DEJAR COMENTARIOS PARA ENTENDERLO BIEN DPS -I !!!!
+###VOY A DEJAR COMENTARIOS PARA ENTENDERLO BIEN DPS
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
