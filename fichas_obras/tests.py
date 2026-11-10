@@ -1,5 +1,5 @@
 from datetime import date
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -19,6 +19,9 @@ class TransicionEstadosYClasificacionTests(TestCase):
             first_name="Carlos",
             last_name="Tapia"
         )
+        grupo_sup, _ = Group.objects.get_or_create(name="SUPERVISOR")
+        self.supervisor.groups.add(grupo_sup)
+        self.client.force_authenticate(user=self.supervisor)
 
         # Cliente de prueba
         self.cliente, _ = Cliente.objects.get_or_create(
@@ -323,3 +326,71 @@ class JWTAuthEndpointsTests(TestCase):
         """El endpoint de refresh no debe aceptar GET."""
         res = self.client.get(self.REFRESH_URL)
         self.assertEqual(res.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+# ── Pruebas de Respuestas de Acceso Denegado (403 Forbidden) ──────────────────
+
+class AccesoDenegadoPermisosTests(TestCase):
+    """
+    Pruebas para el criterio de aceptación de 'Implementar respuestas de acceso denegado':
+    - Un usuario autenticado pero sin el rol requerido recibe HTTP 403 Forbidden.
+    - Un usuario con rol permitido (Gerencial / Supervisor) accede correctamente (HTTP 200).
+    - Un usuario anónimo/no autenticado recibe HTTP 401 Unauthorized.
+    """
+
+    ENDPOINT_OBRAS = "/obras/fyag/v1/obras/"
+    ENDPOINT_CLIENTES = "/obras/fyag/v1/clientes/"
+
+    def setUp(self):
+        self.client = APIClient()
+
+        # Grupos de la base de datos
+        self.grupo_gerencia, _ = Group.objects.get_or_create(name="GERENCIA")
+        self.grupo_tecnico, _ = Group.objects.get_or_create(name="TECNICO")
+
+        # Usuario Técnico (no autorizado para CRUD de obras ni clientes)
+        self.user_tecnico = User.objects.create_user(
+            username="tecnico_test",
+            password="Password_123"
+        )
+        self.user_tecnico.groups.add(self.grupo_tecnico)
+
+        # Usuario Gerente (autorizado)
+        self.user_gerente = User.objects.create_user(
+            username="gerente_test",
+            password="Password_123"
+        )
+        self.user_gerente.groups.add(self.grupo_gerencia)
+
+    def test_usuario_sin_rol_gerencial_recibe_403_forbidden(self):
+        """
+        Un usuario con rol 'TECNICO' intentando acceder al listado de obras
+        recibe respuesta de error HTTP 403 Forbidden.
+        """
+        self.client.force_authenticate(user=self.user_tecnico)
+        response = self.client.get(self.ENDPOINT_OBRAS)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_usuario_sin_rol_gerencial_recibe_403_forbidden_en_clientes(self):
+        """
+        Un usuario con rol 'TECNICO' intentando acceder a clientes
+        recibe respuesta de error HTTP 403 Forbidden.
+        """
+        self.client.force_authenticate(user=self.user_tecnico)
+        response = self.client.get(self.ENDPOINT_CLIENTES)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_usuario_con_rol_gerencial_accede_con_exito_200(self):
+        """
+        Un usuario con rol 'GERENCIA' accede con éxito HTTP 200 al endpoint protegido.
+        """
+        self.client.force_authenticate(user=self.user_gerente)
+        response = self.client.get(self.ENDPOINT_OBRAS)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_usuario_no_autenticado_recibe_401(self):
+        """
+        Un usuario sin credenciales recibe HTTP 401 Unauthorized.
+        """
+        response = self.client.get(self.ENDPOINT_OBRAS)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
