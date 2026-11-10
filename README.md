@@ -3,7 +3,6 @@
 
 
 ## Setup
-e_mod5
 
 1. Crear y activar ambiente:
    ```bash
@@ -43,9 +42,9 @@ e_mod5
 
  8. Usuarios de prueba para cada módulo (Todos tienen la contraseña Prueba1234*):
      ```bash
-   1. gerente_test@fyag.cl - username = gerente_test
-   2. supervisor_test@fyag.cl - username = supervisor_test 
-   3. admin_test@fyag.cl - username = admin_test
-   4. tecnico_test@fyag.cl - username = tecnico_test
+      1. gerente_test@fyag.cl - username = gerente_test
+      2. supervisor_test@fyag.cl - username = supervisor_test 
+      3. admin_test@fyag.cl - username = admin_test
+      4. tecnico_test@fyag.cl - username = tecnico_test
    ```
  
