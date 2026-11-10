@@ -40,13 +40,22 @@ export const authService = {
     },
     // Verifica si el usuario tiene AL MENOS UNO de los roles requeridos
     // Ejemplo: tieneRol('Gerencial', 'Supervisor')
-    //  true si el usuario es Gerencial O Supervisor
+    // Normaliza diferencias de mayúsculas/minúsculas y variantes (ej: "GERENCIA" / "Gerencial" / "Gerente")
     tieneRol(...rolesRequeridos) {
         const usuario = this.getUsuario();
-        if (!usuario) return false;
+        if (!usuario || !Array.isArray(usuario.roles)) return false;
 
-        // some() = ¿alguno de los roles requeridos está en los roles del usuario?
-        return rolesRequeridos.some(rol => usuario.roles?.includes(rol));
+        const normalizar = (r) => {
+            const s = String(r || '').trim().toLowerCase();
+            if (s === 'gerencial' || s === 'gerente' || s === 'gerencia') return 'gerencia';
+            if (s === 'supervisor' || s === 'supervisora') return 'supervisor';
+            if (s === 'administrativo' || s === 'administrador') return 'administrativo';
+            if (s === 'tecnico' || s === 'técnico') return 'tecnico';
+            return s;
+        };
+
+        const rolesUsuarioNormalizados = usuario.roles.map(normalizar);
+        return rolesRequeridos.some(rolReq => rolesUsuarioNormalizados.includes(normalizar(rolReq)));
     },
     estaAutenticado() {
         // Si existe el token, está autenticado
