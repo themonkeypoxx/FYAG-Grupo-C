@@ -349,17 +349,21 @@ class AccesoDenegadoPermisosTests(TestCase):
         self.grupo_tecnico, _ = Group.objects.get_or_create(name="TECNICO")
 
         # Usuario Técnico (no autorizado para CRUD de obras ni clientes)
-        self.user_tecnico = User.objects.create_user(
-            username="tecnico_test",
-            password="Password_123"
-        )
+        self.user_tecnico = User.objects.filter(username="tecnico_test").first()
+        if not self.user_tecnico:
+            self.user_tecnico = User.objects.create_user(
+                username="tecnico_test",
+                password="Password_123"
+            )
         self.user_tecnico.groups.add(self.grupo_tecnico)
 
         # Usuario Gerente (autorizado)
-        self.user_gerente = User.objects.create_user(
-            username="gerente_test",
-            password="Password_123"
-        )
+        self.user_gerente = User.objects.filter(username="gerente_test").first()
+        if not self.user_gerente:
+            self.user_gerente = User.objects.create_user(
+                username="gerente_test",
+                password="Password_123"
+            )
         self.user_gerente.groups.add(self.grupo_gerencia)
 
     def test_usuario_sin_rol_gerencial_recibe_403_forbidden(self):
