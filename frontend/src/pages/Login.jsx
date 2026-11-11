@@ -16,8 +16,28 @@ function Login() {
     setCargando(true);
 
     try {
+      {/* Hola, modifiqué aquí para que dependiendo del rol lleve a vista correspondiente - Ismael*/ }
+      {/* No modificar estos comentarios - Ismael*/ }
+      {/* Como estaremos modelando diferentes roles, la idea esque cada rol tenga sus funciones. 
+        Cada q hagan login, serán llevados a su vista correspondiente.
+        Como el gerente tiene acceso a todo, si un user tiene rol gerencial + cualquier otro,
+        este será llevado a una vista del dashboard gerencial (Sprint 4)
+        en la q tmbn habrán botones para llevar a las vistas de los otros roles ! -Ismael !!! holasi*/}
       await authService.login(username, password);
-      navigate('/dashboard');
+      // Esto es lo q mencioné. Por ahora todos llevan al dashboard d obras, pero POR FAVOR
+      //Cndo agreguen las otras vistas, que cada uno lleve a su coso correspondiente.
+      if (authService.tieneRol('Gerencial')) {
+        navigate('/dashboard'); // Por mientras va al dashboard d obras, pero más adelante aplicar lo q dije arribita
+      } else if (authService.tieneRol('Supervisor')) {
+        navigate('/dashboard'); // El supervisor va al dashboard de obras, aunque sugiero más adelante cambiarle el nombre a la ruta
+        // - Ismael !!!
+      } else if (authService.tieneRol('Tecnico')) {
+        navigate('/dashboard') //esto ya para el Sprint 5, recordar sugerencias del profe
+      }
+      else if (authService.tieneRol('Administrativo')) {
+        navigate('/dashboard') //Acá, esto es parte del Sprint 3, el q estamos haciendo ahora. AQUÍ
+        //reemplazar dashboard de obras x la ruta q corresponda para los administrativos, plssss
+      }
     } catch (err) {
       setError('Credenciales inválidas. Verifica tu usuario y tu contraseña.');
     } finally {
