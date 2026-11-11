@@ -1,6 +1,14 @@
 # FYAG-Grupo-C
 # Proyecto Integrado, Grupo C (TIHI43/D-IEI-N4-P2-C1/D)
 
+# Borrar este info dps:
+
+  ```
+  REESTRUCTURACIÓN:
+   Modelos de obras y tecnicos: apps/obras
+   Modelos de administrativo y clientes: apps/administrativo
+  - Ismael, 10-11-2026 !
+  ```
 
 ## Setup
 
