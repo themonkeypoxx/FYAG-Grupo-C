@@ -27,7 +27,7 @@ function Layout() {
         <Route
           path="/dashboard"
           element={
-            <RutaProtegida roles={['Gerencial']}>
+            <RutaProtegida roles={['Gerencial', 'Supervisor']}> {/* Añadí esto xq daría problemas más adelante - Ismael !!*/}
               <Dashboard />
             </RutaProtegida>
           }
