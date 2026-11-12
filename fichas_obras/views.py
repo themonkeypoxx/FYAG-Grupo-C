@@ -191,7 +191,7 @@ class Crud_obras(viewsets.ModelViewSet):
 
 
 class TipoServicioViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [EsGerencial | EsAdministrativo]
+    permission_classes = [EsGerencial | EsAdministrativo | EsSupervisor  ]
     queryset = TipoServicio.objects.all().order_by("nombre_servicio")
     serializer_class = TipoServ_Serializer
 
@@ -220,7 +220,7 @@ class ObrasAsignadasViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsSupervisor]
+    permission_classes = [EsGerencial | EsSupervisor | EsTecnico]
     serializer_class = AsignacionTecnicoSerializer
     queryset = AsignacionTecnico.objects.select_related("obra", "tecnico").all()
 
@@ -239,7 +239,7 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
 
 
 class PresupuestoViewSet(viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsAdministrativo]
+    permission_classes = [EsGerencial | EsAdministrativo | EsSupervisor]
     serializer_class = PresupuestoSerializer
     queryset = Presupuesto.objects.select_related(
         "obra", "cliente", "creador", "aprobador_gerencia"
