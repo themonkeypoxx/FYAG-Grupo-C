@@ -237,6 +237,32 @@
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* El color de la ficha permite identificar rápidamente su estado operativo. */
+.obra-card.PENDIENTE {
+  background: var(--estado-pendiente-bg);
+  border-left: 5px solid var(--estado-pendiente);
+}
+
+.obra-card.EJECUCION {
+  background: var(--estado-ejecucion-bg);
+  border-left: 5px solid var(--estado-ejecucion);
+}
+
+.obra-card.SUSPENDIDA {
+  background: var(--estado-suspendida-bg);
+  border-left: 5px solid var(--estado-suspendida);
+}
+
+.obra-card.FINALIZADA {
+  background: var(--estado-finalizada-bg);
+  border-left: 5px solid var(--estado-finalizada);
+}
+
+.obra-card.CANCELADA {
+  background: var(--estado-cancelada-bg);
+  border-left: 5px solid var(--estado-cancelada);
+}
+
 .obra-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
@@ -436,7 +462,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.6);
+  background-color: rgba(15, 23, 42, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -458,19 +484,20 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1rem;
+  color: white;
 }
 
 .modal-header h3 {
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--text-main);
+  color: white;
 }
 
 .modal-close {
   background: none;
   border: none;
   font-size: 1.25rem;
-  color: var(--text-muted);
+  color: white;
 }
 
 .modal-body {
@@ -479,7 +506,7 @@
 
 .modal-body p {
   font-size: 0.9rem;
-  color: var(--text-muted);
+  color: white;
   margin-bottom: 1rem;
 }
 
