@@ -97,6 +97,41 @@ class Obras_Serializer(serializers.ModelSerializer):
         return attrs
 
 
+class AsignacionTecnicoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AsignacionTecnico
+        fields = "__all__"
+        read_only_fields = ["id_asignacion", "fecha_asignacion"]
+
+
+class PresupuestoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Presupuesto
+        fields = "__all__"
+        read_only_fields = ["id_presupuesto"]
+
+
+class ItemPresupuestoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ItemPresupuesto
+        fields = "__all__"
+        read_only_fields = ["id_item", "total_linea"]
+
+
+class FacturaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Factura
+        fields = "__all__"
+        read_only_fields = ["id_factura"]
+
+
+class RegistroPagoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RegistroPago
+        fields = "__all__"
+        read_only_fields = ["id_pago", "fecha_pago", "registrador"]
+
+
 
 ###VOY A DEJAR COMENTARIOS PARA ENTENDERLO BIEN DPS
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

@@ -10,6 +10,11 @@ router.register("obras", Crud_obras, basename="obra")
 router.register("tipos-servicio", TipoServicioViewSet, basename="tipo-servicio")
 router.register("estados-obra", EstadoObraViewSet, basename="estado-obra")
 router.register("obras-asignadas", ObrasAsignadasViewSet, basename= "obras-asignadas")
+router.register("asignaciones-tecnico", AsignacionTecnicoViewSet, basename="asignacion-tecnico")
+router.register("presupuestos", PresupuestoViewSet, basename="presupuesto")
+router.register("items-presupuesto", ItemPresupuestoViewSet, basename="item-presupuesto")
+router.register("facturas", FacturaViewSet, basename="factura")
+router.register("pagos", RegistroPagoViewSet, basename="registro-pago")
 
 urlpatterns = [
     path("fyag/v1/", include(router.urls))

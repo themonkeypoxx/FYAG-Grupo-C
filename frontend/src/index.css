@@ -15,14 +15,14 @@
   --text-muted: #64748b;
 
   /* Estados operativos */
-  --estado-pendiente: #eab308;
-  --estado-pendiente-bg: #fefce8;
+  --estado-pendiente: #737373;
+  --estado-pendiente-bg: #dfdfdf;
   --estado-ejecucion: #0284c7;
   --estado-ejecucion-bg: #f0f9ff;
   --estado-suspendida: #f97316;
-  --estado-suspendida-bg: #fff7ed;
+  --estado-suspendida-bg: #f3ddc3;
   --estado-finalizada: #16a34a;
-  --estado-finalizada-bg: #f0fdf4;
+  --estado-finalizada-bg: #c5f1d2;
   --estado-cancelada: #dc2626;
   --estado-cancelada-bg: #fef2f2;
 

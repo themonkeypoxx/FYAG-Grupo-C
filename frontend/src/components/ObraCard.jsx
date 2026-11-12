@@ -15,7 +15,7 @@ export default function ObraCard({ obra, onSolicitarTransicion }) {
   };
 
   return (
-    <article className="obra-card">
+    <article className={`obra-card ${obra.estado_obra_codigo || ''}`}>
       <div>
         <div className="card-header">
           <span className="codigo-tag">{obra.codigo_obra}</span>

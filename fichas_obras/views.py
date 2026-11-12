@@ -7,7 +7,10 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializer import CustomTokenObtainPairSerializer
 
-from .models import Cliente, EstadoObra, Obra, TipoServicio
+from .models import (
+    AsignacionTecnico, Cliente, EstadoObra, Factura, ItemPresupuesto, Obra,
+    Presupuesto, RegistroPago, TipoServicio,
+)
 from .permissions import EsGerencial, EsSupervisor, EsAdministrativo, EsTecnico 
 #x alguna razon faltaba el import de los demas grupos y solo estaban EsSupervisor y Gerencial *raro
 from .serializer import (
@@ -15,6 +18,11 @@ from .serializer import (
     EstadoObra_Serializer,
     Obras_Serializer,
     TipoServ_Serializer,
+    AsignacionTecnicoSerializer,
+    FacturaSerializer,
+    ItemPresupuestoSerializer,
+    PresupuestoSerializer,
+    RegistroPagoSerializer,
 )
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
@@ -209,6 +217,41 @@ class ObrasAsignadasViewSet(viewsets.ReadOnlyModelViewSet):
             return Obra.objects.all()
         
         return Obra.objects.filter(tecnicos_asignados = self.request.user)
+
+
+class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
+    permission_classes = [EsGerencial | EsSupervisor]
+    serializer_class = AsignacionTecnicoSerializer
+    queryset = AsignacionTecnico.objects.select_related("obra", "tecnico").all()
+
+
+class PresupuestoViewSet(viewsets.ModelViewSet):
+    permission_classes = [EsGerencial | EsAdministrativo]
+    serializer_class = PresupuestoSerializer
+    queryset = Presupuesto.objects.select_related(
+        "obra", "cliente", "creador", "aprobador_gerencia"
+    ).all()
+
+
+class ItemPresupuestoViewSet(viewsets.ModelViewSet):
+    permission_classes = [EsGerencial | EsAdministrativo]
+    serializer_class = ItemPresupuestoSerializer
+    queryset = ItemPresupuesto.objects.select_related("presupuesto").all()
+
+
+class FacturaViewSet(viewsets.ModelViewSet):
+    permission_classes = [EsGerencial | EsAdministrativo]
+    serializer_class = FacturaSerializer
+    queryset = Factura.objects.select_related("presupuesto", "cliente").all()
+
+
+class RegistroPagoViewSet(viewsets.ModelViewSet):
+    permission_classes = [EsGerencial | EsAdministrativo]
+    serializer_class = RegistroPagoSerializer
+    queryset = RegistroPago.objects.select_related("factura", "registrador").all()
+
+    def perform_create(self, serializer):
+        serializer.save(registrador=self.request.user)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
