@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import authService from '../Servicios/authService';
 
 export default function Navbar() {
   const location = useLocation();
@@ -17,17 +18,17 @@ export default function Navbar() {
 
         <nav className="nav-links">
           <Link
-            to="/"
+            to={authService.tieneRol('Tecnico') ? '/vista-tecnico' : '/dashboard-obras'}
             className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
           >
-            Dashboard
+            {authService.tieneRol('Tecnico') ? 'Mi horario' : 'Obras'}
           </Link>
-          <Link
+          {!authService.tieneRol('Tecnico') && <Link
             to="/nueva-obra"
             className="btn-primary"
           >
             + Nueva Obra
-          </Link>
+          </Link>}
         </nav>
       </div>
     </header>

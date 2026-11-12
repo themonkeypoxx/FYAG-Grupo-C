@@ -139,6 +139,9 @@ class AsignacionTecnico(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         db_column="id_tecnico", related_name="asignaciones_obra",
     )
+    fecha = models.DateField()
+    hora_inicio = models.TimeField()
+    hora_termino = models.TimeField()
     fecha_asignacion = models.DateTimeField(default=timezone.now)
     activo = models.BooleanField(default=True)
  
@@ -150,6 +153,15 @@ class AsignacionTecnico(models.Model):
                 fields=["obra", "tecnico"],
                 condition=models.Q(activo=True),
                 name="asignacion_activa_unica",
+            ),
+            models.UniqueConstraint(
+                fields=["tecnico", "fecha", "hora_inicio", "hora_termino"],
+                condition=models.Q(activo=True),
+                name="asignacion_tecnico_horario_unico",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(hora_termino__gt=models.F("hora_inicio")),
+                name="asignacion_horario_coherente",
             ),
         ]
  

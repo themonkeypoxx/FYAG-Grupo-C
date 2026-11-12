@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function ObraCard({ obra, onSolicitarTransicion }) {
+export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico }) {
   const transiciones = obra.transiciones_posibles || [];
   const esTerminal = ['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo);
 
@@ -74,6 +74,7 @@ export default function ObraCard({ obra, onSolicitarTransicion }) {
 
       {/* Barra inferior de transición de estados operativos */}
       <div className="card-actions">
+        {onAsignarTecnico && <button type="button" className="btn-primary" onClick={() => onAsignarTecnico(obra)}>Asignar técnico</button>}
         {transiciones.length > 0 ? (
           transiciones.map((tr) => (
             <button

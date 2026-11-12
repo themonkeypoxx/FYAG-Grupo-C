@@ -213,16 +213,29 @@ class ObrasAsignadasViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [EsGerencial | EsTecnico | EsSupervisor]
     def get_queryset(self):
         #se configura el queryset para que de todos los elementos solo si es gerente o supervisor
-        if self.request.user.groups.filter(name='Gerencial').exists() or self.request.user.groups.filter(name='Supervisor').exists():
+        if self.request.user.groups.filter(name__in=['Gerencial', 'GERENCIA', 'Supervisor', 'SUPERVISOR']).exists():
             return Obra.objects.all()
-        
-        return Obra.objects.filter(tecnicos_asignados = self.request.user)
+
+        return Obra.objects.filter(asignaciones__tecnico=self.request.user, asignaciones__activo=True).distinct()
 
 
 class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsSupervisor]
     serializer_class = AsignacionTecnicoSerializer
     queryset = AsignacionTecnico.objects.select_related("obra", "tecnico").all()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.request.user.groups.filter(name__in=["Tecnico", "TECNICO", "Técnico"]).exists() and not self.request.user.groups.filter(name__in=["Supervisor", "SUPERVISOR", "Gerencial", "GERENCIA"]).exists():
+            return queryset.filter(tecnico=self.request.user, activo=True)
+        return queryset
+
+    @action(detail=False, methods=["get"], url_path="tecnicos")
+    def tecnicos(self, request):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        tecnicos = User.objects.filter(groups__name__in=["Tecnico", "TECNICO", "Técnico"], is_active=True).distinct().order_by("first_name", "last_name", "username")
+        return Response([{"id": user.pk, "username": user.username, "nombre": user.get_full_name() or user.username} for user in tecnicos])
 
 
 class PresupuestoViewSet(viewsets.ModelViewSet):

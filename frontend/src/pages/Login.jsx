@@ -27,15 +27,15 @@ function Login() {
       // Esto es lo q mencioné. Por ahora todos llevan al dashboard d obras, pero POR FAVOR
       //Cndo agreguen las otras vistas, que cada uno lleve a su coso correspondiente.
       if (authService.tieneRol('Gerencial')) {
-        navigate('/dashboard'); // Por mientras va al dashboard d obras, pero más adelante aplicar lo q dije arribita
+        navigate('/dashboard-obras');
       } else if (authService.tieneRol('Supervisor')) {
-        navigate('/dashboard'); // El supervisor va al dashboard de obras, aunque sugiero más adelante cambiarle el nombre a la ruta
+        navigate('/dashboard-obras');
         // - Ismael !!!
       } else if (authService.tieneRol('Tecnico')) {
-        navigate('/dashboard') //esto ya para el Sprint 5, recordar sugerencias del profe
+        navigate('/vista-tecnico')
       }
       else if (authService.tieneRol('Administrativo')) {
-        navigate('/dashboard') //Acá, esto es parte del Sprint 3, el q estamos haciendo ahora. AQUÍ
+        navigate('/dashboard-obras')
         //reemplazar dashboard de obras x la ruta q corresponda para los administrativos, plssss
       }
     } catch (err) {

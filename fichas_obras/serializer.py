@@ -98,10 +98,43 @@ class Obras_Serializer(serializers.ModelSerializer):
 
 
 class AsignacionTecnicoSerializer(serializers.ModelSerializer):
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
+    ubicacion_faena = serializers.CharField(source="obra.ubicacion_faena", read_only=True)
+    tecnico_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = AsignacionTecnico
-        fields = "__all__"
+        fields = [
+            "id_asignacion", "obra", "tecnico", "fecha", "hora_inicio", "hora_termino",
+            "activo", "fecha_asignacion", "obra_nombre", "obra_codigo",
+            "ubicacion_faena", "tecnico_nombre",
+        ]
         read_only_fields = ["id_asignacion", "fecha_asignacion"]
+
+    def get_tecnico_nombre(self, obj):
+        return obj.tecnico.get_full_name() or obj.tecnico.username
+
+    def validate(self, attrs):
+        tecnico = attrs.get("tecnico", getattr(self.instance, "tecnico", None))
+        fecha = attrs.get("fecha", getattr(self.instance, "fecha", None))
+        inicio = attrs.get("hora_inicio", getattr(self.instance, "hora_inicio", None))
+        termino = attrs.get("hora_termino", getattr(self.instance, "hora_termino", None))
+        activo = attrs.get("activo", getattr(self.instance, "activo", True))
+        if tecnico and not tecnico.groups.filter(name__in=["Tecnico", "TECNICO", "Técnico"]).exists():
+            raise serializers.ValidationError({"tecnico": "El usuario seleccionado no tiene el rol de técnico."})
+        if inicio and termino and termino <= inicio:
+            raise serializers.ValidationError({"hora_termino": "Debe ser posterior a la hora de inicio."})
+        if tecnico and fecha and inicio and termino and activo:
+            conflictos = AsignacionTecnico.objects.filter(
+                tecnico=tecnico, fecha=fecha, activo=True,
+                hora_inicio__lt=termino, hora_termino__gt=inicio,
+            )
+            if self.instance:
+                conflictos = conflictos.exclude(pk=self.instance.pk)
+            if conflictos.exists():
+                raise serializers.ValidationError({"horario": "El técnico ya tiene una obra asignada en ese horario."})
+        return attrs
 
 
 class PresupuestoSerializer(serializers.ModelSerializer):

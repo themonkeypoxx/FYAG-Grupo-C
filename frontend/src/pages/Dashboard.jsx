@@ -23,6 +23,10 @@ export default function Dashboard() {
   });
   const [cargandoTransicion, setCargandoTransicion] = useState(false);
   const [notificacion, setNotificacion] = useState(null);
+  const [asignacionObra, setAsignacionObra] = useState(null);
+  const [tecnicos, setTecnicos] = useState([]);
+  const [asignacionForm, setAsignacionForm] = useState({ tecnico: '', fecha: new Date().toISOString().slice(0, 10), hora_inicio: '09:00', hora_termino: '10:00' });
+  const [guardandoAsignacion, setGuardandoAsignacion] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -94,6 +98,32 @@ export default function Dashboard() {
       obra,
       transicion,
     });
+  };
+
+  const abrirAsignacion = async (obra) => {
+    setAsignacionObra(obra);
+    try {
+      const lista = await obrasService.getTecnicos();
+      setTecnicos(lista);
+      setAsignacionForm((actual) => ({ ...actual, tecnico: lista[0]?.id || '' }));
+    } catch {
+      setNotificacion({ tipo: 'error', mensaje: 'No se pudo cargar el listado de técnicos.' });
+    }
+  };
+
+  const guardarAsignacion = async (event) => {
+    event.preventDefault();
+    setGuardandoAsignacion(true);
+    try {
+      await obrasService.asignarTecnico({ obra: asignacionObra.id_obra, ...asignacionForm });
+      setAsignacionObra(null);
+      setNotificacion({ tipo: 'exito', mensaje: 'Técnico asignado al horario.' });
+    } catch (err) {
+      const data = err.response?.data;
+      setNotificacion({ tipo: 'error', mensaje: data?.horario?.[0] || data?.detail || 'No se pudo asignar el técnico. Revisa que no tenga otra obra en ese horario.' });
+    } finally {
+      setGuardandoAsignacion(false);
+    }
   };
 
   const handleConfirmarTransicion = async (nuevoEstadoCodigo, motivo) => {
@@ -257,6 +287,7 @@ export default function Dashboard() {
               key={obra.id_obra}
               obra={obra}
               onSolicitarTransicion={handleSolicitarTransicion}
+              onAsignarTecnico={abrirAsignacion}
             />
           ))}
         </div>
@@ -270,6 +301,15 @@ export default function Dashboard() {
         onClose={() => setModalData({ isOpen: false, obra: null, transicion: null })}
         onConfirmar={handleConfirmarTransicion}
       />
+      {asignacionObra && <div role="presentation" onClick={() => setAsignacionObra(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, .55)', zIndex: 100, display: 'grid', placeItems: 'center', padding: '1rem' }}>
+        <form onSubmit={guardarAsignacion} onClick={(event) => event.stopPropagation()} style={{ width: 'min(440px, 100%)', background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', display: 'grid', gap: '1rem' }}>
+          <h2 style={{ margin: 0 }}>Asignar técnico · {asignacionObra.codigo_obra}</h2>
+          <label>Técnico<select required value={asignacionForm.tecnico} onChange={(e) => setAsignacionForm({ ...asignacionForm, tecnico: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }}><option value="">Selecciona un técnico</option>{tecnicos.map((tecnico) => <option key={tecnico.id} value={tecnico.id}>{tecnico.nombre}</option>)}</select></label>
+          <label>Fecha<input required type="date" value={asignacionForm.fecha} onChange={(e) => setAsignacionForm({ ...asignacionForm, fecha: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label>
+          <div style={{ display: 'flex', gap: '.75rem' }}><label style={{ flex: 1 }}>Desde<input required type="time" value={asignacionForm.hora_inicio} onChange={(e) => setAsignacionForm({ ...asignacionForm, hora_inicio: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label><label style={{ flex: 1 }}>Hasta<input required type="time" value={asignacionForm.hora_termino} onChange={(e) => setAsignacionForm({ ...asignacionForm, hora_termino: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label></div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}><button type="button" className="btn-secondary" onClick={() => setAsignacionObra(null)}>Cancelar</button><button type="submit" className="btn-primary" disabled={guardandoAsignacion || !tecnicos.length}>{guardandoAsignacion ? 'Guardando…' : 'Confirmar asignación'}</button></div>
+        </form>
+      </div>}
     </div>
   );
 }
