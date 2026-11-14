@@ -40,7 +40,7 @@
    5. Salir de la carpeta frondend en la termina: "cd .."
    ```
 
- 8. Usuarios de prueba para cada módulo (Todos tienen la contraseña Prueba1234*):
+ 8. Usuarios de prueba para cada módulo (Todos tienen la contraseña  ):
      ```bash
       1. gerente_test@fyag.cl - username = gerente_test
       2. supervisor_test@fyag.cl - username = supervisor_test 

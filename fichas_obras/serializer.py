@@ -65,6 +65,7 @@ class Obras_Serializer(serializers.ModelSerializer):
         source='cliente.rut_empresa', read_only=True
     )
     supervisor_nombre = serializers.SerializerMethodField()
+    tecnicos_asignados = serializers.SerializerMethodField()
     transiciones_posibles = serializers.SerializerMethodField()
 
     class Meta:
@@ -76,6 +77,23 @@ class Obras_Serializer(serializers.ModelSerializer):
             return "Sin asignar"
         full = obj.supervisor.get_full_name()
         return full if full else obj.supervisor.username
+
+    def get_tecnicos_asignados(self, obj):
+        asignaciones = getattr(obj, "asignaciones_activas", None)
+        if asignaciones is None:
+            asignaciones = obj.asignaciones.filter(activo=True).select_related("tecnico")
+
+        return [
+            {
+                "id_asignacion": asignacion.id_asignacion,
+                "tecnico": asignacion.tecnico_id,
+                "tecnico_nombre": asignacion.tecnico.get_full_name() or asignacion.tecnico.username,
+                "fecha": asignacion.fecha,
+                "hora_inicio": asignacion.hora_inicio,
+                "hora_termino": asignacion.hora_termino,
+            }
+            for asignacion in asignaciones
+        ]
 
     def get_transiciones_posibles(self, obj):
         if not obj.estado_obra:
@@ -100,10 +118,101 @@ class Obras_Serializer(serializers.ModelSerializer):
 
 
 class AsignacionTecnicoSerializer(serializers.ModelSerializer):
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
+    ubicacion_faena = serializers.CharField(source="obra.ubicacion_faena", read_only=True)
+    tipo_servicio_codigo = serializers.CharField(source="obra.tipo_servicio.codigo", read_only=True)
+    tipo_servicio_nombre = serializers.CharField(source="obra.tipo_servicio.nombre_servicio", read_only=True)
+    estado_obra_codigo = serializers.CharField(source="obra.estado_obra.codigo_estado", read_only=True)
+    estado_obra_descripcion = serializers.CharField(source="obra.estado_obra.descripcion", read_only=True)
+    tecnico_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = AsignacionTecnico
-        fields = "__all__"
+        fields = [
+            "id_asignacion", "obra", "tecnico", "fecha", "hora_inicio", "hora_termino",
+            "activo", "fecha_asignacion", "obra_nombre", "obra_codigo",
+            "ubicacion_faena", "tipo_servicio_codigo", "tipo_servicio_nombre",
+            "estado_obra_codigo", "estado_obra_descripcion", "tecnico_nombre",
+        ]
         read_only_fields = ["id_asignacion", "fecha_asignacion"]
+
+    def get_tecnico_nombre(self, obj):
+        return obj.tecnico.get_full_name() or obj.tecnico.username
+
+    def validate(self, attrs):
+        tecnico = attrs.get("tecnico", getattr(self.instance, "tecnico", None))
+        fecha = attrs.get("fecha", getattr(self.instance, "fecha", None))
+        inicio = attrs.get("hora_inicio", getattr(self.instance, "hora_inicio", None))
+        termino = attrs.get("hora_termino", getattr(self.instance, "hora_termino", None))
+        activo = attrs.get("activo", getattr(self.instance, "activo", True))
+        if tecnico and not tecnico.groups.filter(name__in=["Tecnico", "TECNICO", "Técnico"]).exists():
+            raise serializers.ValidationError({"tecnico": "El usuario seleccionado no tiene el rol de técnico."})
+        if inicio and termino and termino <= inicio:
+            raise serializers.ValidationError({"hora_termino": "Debe ser posterior a la hora de inicio."})
+        if tecnico and fecha and inicio and termino and activo:
+            conflictos = AsignacionTecnico.objects.filter(
+                tecnico=tecnico, fecha=fecha, activo=True,
+                hora_inicio__lt=termino, hora_termino__gt=inicio,
+            )
+            if self.instance:
+                conflictos = conflictos.exclude(pk=self.instance.pk)
+            if conflictos.exists():
+                raise serializers.ValidationError({"horario": "El técnico ya tiene una obra asignada en ese horario."})
+        return attrs
+
+
+class SolicitudCambioObraSerializer(serializers.ModelSerializer):
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
+    tecnico_nombre = serializers.SerializerMethodField()
+    supervisor_nombre = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SolicitudCambioObra
+        fields = [
+            "id_solicitud", "obra", "obra_codigo", "obra_nombre", "tecnico",
+            "tecnico_nombre", "tipo", "motivo", "estado", "respuesta_supervisor",
+            "supervisor_respuesta", "supervisor_nombre", "solicitada_en", "respondida_en",
+        ]
+        read_only_fields = [
+            "id_solicitud", "tecnico", "estado", "supervisor_respuesta",
+            "supervisor_nombre", "solicitada_en", "respondida_en",
+        ]
+
+    def get_tecnico_nombre(self, obj):
+        return obj.tecnico.get_full_name() or obj.tecnico.username
+
+    def get_supervisor_nombre(self, obj):
+        if not obj.supervisor_respuesta:
+            return None
+        return obj.supervisor_respuesta.get_full_name() or obj.supervisor_respuesta.username
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        obra = attrs.get("obra", getattr(self.instance, "obra", None))
+        if request and request.user.groups.filter(name__in=["Tecnico", "TECNICO", "Técnico"]).exists():
+            if not AsignacionTecnico.objects.filter(
+                obra=obra, tecnico=request.user, activo=True
+            ).exists():
+                raise serializers.ValidationError(
+                    {"obra": "Solo puedes solicitar cambios sobre obras que tienes asignadas."}
+                )
+
+        if obra and obra.estado_obra.codigo_estado in ["FINALIZADA", "CANCELADA"]:
+            raise serializers.ValidationError(
+                {"obra": "No se puede solicitar un cambio para una obra cerrada."}
+            )
+
+        if self.instance is None and obra and SolicitudCambioObra.objects.filter(
+            obra=obra,
+            tecnico=request.user if request else None,
+            estado=SolicitudCambioObra.EstadoSolicitud.PENDIENTE,
+        ).exists():
+            raise serializers.ValidationError(
+                "Ya existe una solicitud pendiente para esta obra."
+            )
+        return attrs
 
 
 class PresupuestoSerializer(serializers.ModelSerializer):
@@ -205,8 +314,15 @@ class FacturaSerializer(serializers.ModelSerializer):
         model = Factura
         fields = "__all__"
         read_only_fields = ["id_factura"]
+        extra_kwargs = {
+            "cliente": {"required": False},
+        }
 
     def validate(self, attrs):
+        presupuesto = attrs.get("presupuesto") or (self.instance.presupuesto if self.instance else None)
+        if presupuesto and not attrs.get("cliente"):
+            attrs["cliente"] = presupuesto.cliente
+
         monto_total = attrs.get("monto_total") or (self.instance.monto_total if self.instance else None)
         saldo = attrs.get("saldo_pendiente")
 

@@ -61,6 +61,44 @@ export const obrasService = {
     const response = await api.post('/obras/fyag/v1/obras/', datosObra);
     return response.data;
   },
+
+  async actualizarObra(obraId, datosObra) {
+    const response = await api.patch(`/obras/fyag/v1/obras/${obraId}/`, datosObra);
+    return response.data;
+  },
+
+  async getTecnicos() {
+    const response = await api.get('/obras/fyag/v1/asignaciones-tecnico/tecnicos/');
+    return response.data;
+  },
+
+  async asignarTecnico(datos) {
+    const response = await api.post('/obras/fyag/v1/asignaciones-tecnico/', datos);
+    return response.data;
+  },
+
+  async getAsignaciones() {
+    const response = await api.get('/obras/fyag/v1/asignaciones-tecnico/');
+    return response.data;
+  },
+
+  async getSolicitudesCambio() {
+    const response = await api.get('/obras/fyag/v1/solicitudes-cambio-obra/');
+    return response.data;
+  },
+
+  async solicitarCambioObra(datos) {
+    const response = await api.post('/obras/fyag/v1/solicitudes-cambio-obra/', datos);
+    return response.data;
+  },
+
+  async resolverSolicitudCambio(solicitudId, accion, respuesta = '') {
+    const response = await api.post(`/obras/fyag/v1/solicitudes-cambio-obra/${solicitudId}/resolver/`, {
+      accion,
+      respuesta,
+    });
+    return response.data;
+  },
 };
 
 export default obrasService;

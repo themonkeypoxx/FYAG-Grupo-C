@@ -268,6 +268,94 @@
   box-shadow: var(--shadow-md);
 }
 
+.tecnicos-asignados {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.tecnicos-asignados ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tecnicos-asignados li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.tecnicos-asignados small,
+.sin-tecnicos {
+  color: var(--text-muted);
+}
+
+.tecnicos-asignados small {
+  white-space: nowrap;
+}
+
+.solicitudes-panel {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.solicitudes-panel-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.solicitudes-panel-header p {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.solicitudes-lista {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.solicitud-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.solicitud-item > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.solicitud-item span,
+.solicitud-item p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.solicitud-item p {
+  margin: 0.25rem 0 0;
+}
+
+.solicitud-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .card-header {
   display: flex;
   align-items: flex-start;
@@ -462,21 +550,25 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.7);
+  background-color: rgba(15, 23, 42, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  z-index: 1050;
   padding: 1rem;
 }
 
-.modal-content {
-  background: var(--surface);
+.modal-content,
+.modal-cambiar-estado {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
   border-radius: 12px;
   max-width: 480px;
   width: 100%;
   padding: 1.5rem;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border);
+  color: var(--text-main);
 }
 
 .modal-header {
@@ -484,20 +576,20 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1rem;
-  color: white;
+  color: var(--text-main);
 }
 
 .modal-header h3 {
   font-size: 1.15rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-main);
 }
 
 .modal-close {
   background: none;
   border: none;
   font-size: 1.25rem;
-  color: white;
+  color: var(--text-main);
 }
 
 .modal-body {
@@ -506,7 +598,7 @@
 
 .modal-body p {
   font-size: 0.9rem;
-  color: white;
+  color: var(--text-main);
   margin-bottom: 1rem;
 }
 

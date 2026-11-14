@@ -1,11 +1,38 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import authService from '../Servicios/authService';
 
-export default function ObraCard({ obra, onSolicitarTransicion }) {
+export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico, onEditarObra }) {
   const transiciones = obra.transiciones_posibles || [];
+  const tecnicosAsignados = obra.tecnicos_asignados || [];
   const esTerminal = ['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo);
-  const puedePresupuestar = authService.tieneRol('Gerencial', 'Administrativo');
+  const puedePresupuestar = authService.tieneRol('Gerencial', 'Supervisor', 'Administrativo');
+
+  // Formato para técnicos asignados
+  const formatear = (a) =>
+    `${a.fecha} · ${a.hora_inicio?.slice(0, 5)}–${a.hora_termino?.slice(0, 5)}`;
+
+  // Agrupación por técnico
+  const resumenPorTecnico = useMemo(() => {
+    const grupos = {};
+    tecnicosAsignados.forEach((a) => {
+      const clave = a.tecnico_nombre;
+      if (!grupos[clave]) grupos[clave] = [];
+      grupos[clave].push(a);
+    });
+
+    return Object.entries(grupos).map(([nombre, asignaciones]) => {
+      const ordenadas = [...asignaciones].sort((a, b) =>
+        `${a.fecha} ${a.hora_inicio}`.localeCompare(`${b.fecha} ${b.hora_inicio}`)
+      );
+      return {
+        nombre,
+        primera: ordenadas[0],
+        ultima: ordenadas[ordenadas.length - 1],
+        total: ordenadas.length,
+      };
+    });
+  }, [tecnicosAsignados]);
 
   // Formato chileno de moneda
   const formatearMonto = (monto) => {
@@ -60,6 +87,29 @@ export default function ObraCard({ obra, onSolicitarTransicion }) {
           )}
         </div>
 
+        {/* Técnicos asignados */}
+        <div className="tecnicos-asignados">
+          <strong>Técnicos asignados</strong>
+          {resumenPorTecnico.length > 0 ? (
+            <ul>
+              {resumenPorTecnico.map((t) => (
+                <li key={t.nombre} className="tecnico-item">
+                  <span>
+                    {t.nombre} <small>({t.total} {t.total === 1 ? 'día' : 'días'})</small>
+                  </span>
+                  <small>
+                    {t.total === 1
+                      ? formatear(t.primera)
+                      : `${t.primera.fecha} → ${t.ultima.fecha}`}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span className="sin-tecnicos">Sin técnicos asignados</span>
+          )}
+        </div>
+
         {/* Alerta de motivo en caso de suspensión o cancelación */}
         {obra.motivo_suspension_cancelacion && (
           <div className="motivo-alerta">
@@ -77,6 +127,16 @@ export default function ObraCard({ obra, onSolicitarTransicion }) {
 
       {/* Barra inferior de transición de estados operativos y acciones */}
       <div className="card-actions">
+        {onEditarObra && (
+          <button type="button" className="btn-secondary" onClick={() => onEditarObra(obra)}>
+            Editar detalles
+          </button>
+        )}
+        {onAsignarTecnico && (
+          <button type="button" className="btn-primary" onClick={() => onAsignarTecnico(obra)}>
+            Asignar técnico
+          </button>
+        )}
         {!esTerminal && puedePresupuestar && (
           <Link
             to="/nuevo-presupuesto"
@@ -115,4 +175,3 @@ export default function ObraCard({ obra, onSolicitarTransicion }) {
     </article>
   );
 }
-

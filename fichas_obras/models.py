@@ -139,6 +139,9 @@ class AsignacionTecnico(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         db_column="id_tecnico", related_name="asignaciones_obra",
     )
+    fecha = models.DateField()
+    hora_inicio = models.TimeField()
+    hora_termino = models.TimeField()
     fecha_asignacion = models.DateTimeField(default=timezone.now)
     activo = models.BooleanField(default=True)
  
@@ -147,14 +150,66 @@ class AsignacionTecnico(models.Model):
         constraints = [
             # Un técnico no puede estar asignado dos veces (activo) a la misma obra
             models.UniqueConstraint(
-                fields=["obra", "tecnico"],
+                fields=["obra", "tecnico", "fecha", "hora_inicio", "hora_termino"],
                 condition=models.Q(activo=True),
                 name="asignacion_activa_unica",
+            ),
+            models.UniqueConstraint(
+                fields=["tecnico", "fecha", "hora_inicio", "hora_termino"],
+                condition=models.Q(activo=True),
+                name="asignacion_tecnico_horario_unico",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(hora_termino__gt=models.F("hora_inicio")),
+                name="asignacion_horario_coherente",
             ),
         ]
  
     def __str__(self):
         return f"{self.tecnico} -> {self.obra.codigo_obra}"
+
+
+class SolicitudCambioObra(models.Model):
+    class TipoSolicitud(models.TextChoices):
+        SUSPENSION = "SUSPENSION", "Suspensión"
+        CANCELACION = "CANCELACION", "Cancelación"
+
+    class EstadoSolicitud(models.TextChoices):
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        APROBADA = "APROBADA", "Aprobada"
+        RECHAZADA = "RECHAZADA", "Rechazada"
+
+    id_solicitud = models.AutoField(primary_key=True)
+    obra = models.ForeignKey(
+        Obra, on_delete=models.CASCADE,
+        db_column="id_obra", related_name="solicitudes_cambio",
+    )
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        db_column="id_tecnico", related_name="solicitudes_cambio_obra",
+    )
+    tipo = models.CharField(max_length=20, choices=TipoSolicitud.choices)
+    motivo = models.TextField()
+    estado = models.CharField(
+        max_length=20,
+        choices=EstadoSolicitud.choices,
+        default=EstadoSolicitud.PENDIENTE,
+    )
+    respuesta_supervisor = models.TextField(blank=True)
+    supervisor_respuesta = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        db_column="id_supervisor_respuesta", related_name="solicitudes_resueltas",
+        null=True, blank=True,
+    )
+    solicitada_en = models.DateTimeField(auto_now_add=True)
+    respondida_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "solicitud_cambio_obra"
+        ordering = ["-solicitada_en"]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} · {self.obra.codigo_obra} · {self.estado}"
  
  
 # ---------------------------------------------------------------------------

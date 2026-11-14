@@ -5,6 +5,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NuevaObra from './pages/NuevaObra';
 import NuevoPresupuesto from './pages/NuevoPresupuesto';
+import VistaTecnico from './pages/Vista-tecnico';
+import PanelAdministrativo from './pages/PanelAdministrativo';
 import AccesoDenegado from './pages/AccesoDenegado';
 import RutaProtegida from './Servicios/RutaProtegida';
 import './App.css';
@@ -22,13 +24,13 @@ function Layout() {
 
         {/* 
           Rutas protegidas por rol (Criterio: Manipulación de URL):
-          En caso que un usuario no Gerente intente manipular la URL para acceder 
-          al dashboard o al registro de auditoría, el sistema valida el rol y muestra 403 Forbidden.
+          En caso que un usuario no autorizado intente manipular la URL,
+          el sistema valida el rol y muestra 403 Forbidden.
         */}
         <Route
-          path="/dashboard"
+          path="/dashboard-obras"
           element={
-            <RutaProtegida roles={['Gerencial', 'Supervisor']}> {/* Añadí esto xq daría problemas más adelante - Ismael !!*/}
+            <RutaProtegida roles={['Gerencial', 'Supervisor']}>
               <Dashboard />
             </RutaProtegida>
           }
@@ -66,12 +68,35 @@ function Layout() {
         />
 
         <Route
+          path="/vista-tecnico"
+          element={
+            <RutaProtegida roles={['Gerencial', 'Tecnico']}>
+              <VistaTecnico />
+            </RutaProtegida>
+          }
+        />
+
+        <Route
+          path="/vista-administrativo"
+          element={
+            <RutaProtegida roles={['Gerencial', 'Administrativo']}>
+              <PanelAdministrativo />
+            </RutaProtegida>
+          }
+        />
+
+        <Route
           path="/nuevo-presupuesto"
           element={
             <RutaProtegida roles={['Gerencial', 'Supervisor', 'Administrativo']}>
               <NuevoPresupuesto />
             </RutaProtegida>
           }
+        />
+
+        <Route
+          path="/vista-tecnico"
+          element={<RutaProtegida roles={['Gerencial', 'Tecnico']}><VistaTecnico /></RutaProtegida>}
         />
 
         {/* Ruta directa para error 403 Forbidden / Acceso Denegado */}
