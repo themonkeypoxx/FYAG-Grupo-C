@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db.models import Count, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -273,16 +274,73 @@ class ItemPresupuestoViewSet(viewsets.ModelViewSet):
 class FacturaViewSet(viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = FacturaSerializer
-    queryset = Factura.objects.select_related("presupuesto", "cliente").all()
+    queryset = Factura.objects.select_related("presupuesto", "cliente").filter(soft_deleted=False).order_by("-fecha_emision")
+
+    @action(detail=True, methods=["post"], url_path="actualizar-estado-pago")
+    def actualizar_estado_pago(self, request, pk=None):
+        factura = self.get_object()
+        nuevo_estado = request.data.get("estado_pago") or request.data.get("nuevo_estado")
+        monto_abono = request.data.get("monto_abono")
+
+        if monto_abono is not None:
+            try:
+                abono = Decimal(str(monto_abono))
+                if abono <= 0:
+                    return Response({"error": "El monto del abono debe ser mayor a 0."}, status=status.HTTP_400_BAD_REQUEST)
+                if abono > factura.saldo_pendiente:
+                    return Response(
+                        {"error": f"El abono (${abono}) excede el saldo pendiente (${factura.saldo_pendiente})."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                RegistroPago.objects.create(
+                    factura=factura,
+                    registrador=request.user,
+                    monto_abonado=abono,
+                    metodo_pago=request.data.get("metodo_pago", "Transferencia"),
+                    nro_comprobante=request.data.get("nro_comprobante", ""),
+                    notas=request.data.get("notas", ""),
+                )
+                nuevo_saldo = factura.saldo_pendiente - abono
+                factura.saldo_pendiente = nuevo_saldo
+                factura.estado_pago = Factura.EstadoPago.PAGADO if nuevo_saldo == Decimal("0.00") else Factura.EstadoPago.PAGO_PARCIAL
+                factura.save()
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        elif nuevo_estado:
+            estados_validos = [e.value for e in Factura.EstadoPago]
+            if nuevo_estado not in estados_validos:
+                return Response({"error": f"Estado inválido. Opciones válidas: {estados_validos}"}, status=status.HTTP_400_BAD_REQUEST)
+            factura.estado_pago = nuevo_estado
+            if nuevo_estado == Factura.EstadoPago.PAGADO:
+                factura.saldo_pendiente = Decimal("0.00")
+            elif nuevo_estado == Factura.EstadoPago.PENDIENTE:
+                factura.saldo_pendiente = factura.monto_total
+            factura.save()
+        else:
+            return Response({"error": "Debe especificar 'estado_pago' o 'monto_abono'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "mensaje": f"Estado de pago actualizado exitosamente a '{factura.estado_pago}'.",
+            "factura": FacturaSerializer(factura).data,
+        }, status=status.HTTP_200_OK)
 
 
 class RegistroPagoViewSet(viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = RegistroPagoSerializer
-    queryset = RegistroPago.objects.select_related("factura", "registrador").all()
+    queryset = RegistroPago.objects.select_related("factura", "registrador").order_by("-fecha_pago")
 
     def perform_create(self, serializer):
-        serializer.save(registrador=self.request.user)
+        pago = serializer.save(registrador=self.request.user)
+        factura = pago.factura
+        nuevo_saldo = max(Decimal("0.00"), factura.saldo_pendiente - pago.monto_abonado)
+        factura.saldo_pendiente = nuevo_saldo
+        if nuevo_saldo == Decimal("0.00"):
+            factura.estado_pago = Factura.EstadoPago.PAGADO
+        else:
+            factura.estado_pago = Factura.EstadoPago.PAGO_PARCIAL
+        factura.save()
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
