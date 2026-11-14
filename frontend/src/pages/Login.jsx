@@ -11,7 +11,6 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Intentando iniciar sesión con:", { username, password });
     setError('');
     setCargando(true);
 

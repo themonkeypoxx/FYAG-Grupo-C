@@ -1,11 +1,11 @@
-from datetime import date
+from datetime import date, time
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import Cliente, EstadoObra, Obra, TipoServicio
+from .models import AsignacionTecnico, Cliente, EstadoObra, Obra, TipoServicio
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
 
@@ -398,3 +398,90 @@ class AccesoDenegadoPermisosTests(TestCase):
         """
         response = self.client.get(self.ENDPOINT_OBRAS)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AsignacionesPorIntervaloYSolicitudesTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.supervisor = User.objects.create_user(username="supervisor_intervalo")
+        self.supervisor.groups.add(Group.objects.get_or_create(name="SUPERVISOR")[0])
+        self.tecnico = User.objects.create_user(username="tecnico_intervalo")
+        self.tecnico.groups.add(Group.objects.get_or_create(name="TECNICO")[0])
+        self.cliente = Cliente.objects.get_or_create(
+            rut_empresa="76123456-7",
+            razon_social="Cliente Intervalo SpA",
+        )[0]
+        self.tipo = TipoServicio.objects.get_or_create(
+            codigo="INTERVALO", nombre_servicio="Servicio de intervalo"
+        )[0]
+        self.estado_pendiente = EstadoObra.objects.get_or_create(
+            codigo_estado="PENDIENTE", descripcion="Pendiente"
+        )[0]
+        self.estado_cancelada = EstadoObra.objects.get_or_create(
+            codigo_estado="CANCELADA", descripcion="Cancelada"
+        )[0]
+        self.obra = Obra.objects.create(
+            codigo_obra="OBRA-INTERVALO-001",
+            nombre_obra="Obra de prueba de intervalo",
+            ubicacion_faena="Santiago",
+            fecha_inicio=date(2026, 12, 1),
+            cliente=self.cliente,
+            tipo_servicio=self.tipo,
+            estado_obra=self.estado_pendiente,
+            supervisor=self.supervisor,
+        )
+
+    def test_asignacion_por_intervalo_omite_fines_de_semana(self):
+        self.client.force_authenticate(user=self.supervisor)
+        response = self.client.post(
+            "/obras/fyag/v1/asignaciones-tecnico/",
+            {
+                "obra": str(self.obra.id_obra),
+                "tecnico": self.tecnico.pk,
+                "fecha_inicio": "2026-12-09",
+                "fecha_termino": "2026-12-21",
+                "hora_inicio": "08:00",
+                "hora_termino": "14:00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["asignaciones"].__len__(), 9)
+        self.assertFalse(AsignacionTecnico.objects.filter(fecha__week_day__in=[1, 7]).exists())
+
+    def test_tecnico_solicita_y_supervisor_aprueba_cancelacion(self):
+        AsignacionTecnico.objects.create(
+            obra=self.obra,
+            tecnico=self.tecnico,
+            fecha=date(2026, 12, 9),
+            hora_inicio=time(8),
+            hora_termino=time(14),
+        )
+        self.client.force_authenticate(user=self.tecnico)
+        solicitud = self.client.post(
+            "/obras/fyag/v1/solicitudes-cambio-obra/",
+            {"obra": str(self.obra.id_obra), "tipo": "CANCELACION", "motivo": "Cliente canceló el servicio"},
+            format="json",
+        )
+        self.assertEqual(solicitud.status_code, status.HTTP_201_CREATED)
+
+        self.client.force_authenticate(user=self.supervisor)
+        resolver = self.client.post(
+            f"/obras/fyag/v1/solicitudes-cambio-obra/{solicitud.data['id_solicitud']}/resolver/",
+            {"accion": "APROBAR"},
+            format="json",
+        )
+        self.assertEqual(resolver.status_code, status.HTTP_200_OK)
+        self.obra.refresh_from_db()
+        self.assertEqual(self.obra.estado_obra.codigo_estado, "CANCELADA")
+
+    def test_supervisor_puede_editar_detalles_de_obra(self):
+        self.client.force_authenticate(user=self.supervisor)
+        response = self.client.patch(
+            f"/obras/fyag/v1/obras/{self.obra.id_obra}/",
+            {"nombre_obra": "Obra actualizada", "ubicacion_faena": "Rancagua"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.obra.refresh_from_db()
+        self.assertEqual(self.obra.nombre_obra, "Obra actualizada")

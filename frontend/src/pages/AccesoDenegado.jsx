@@ -93,7 +93,7 @@ export default function AccesoDenegado({ rolRequerido = 'Gerencial' }) {
                 borderRadius: '4px',
                 fontWeight: 600,
               }}>
-                {rolesUsuario}
+                {rolesUsuario[1] === ',' ? rolesUsuario.split(',')[0] : rolesUsuario}
               </span>
             </div>
           </div>

@@ -25,8 +25,11 @@ export default function Dashboard() {
   const [notificacion, setNotificacion] = useState(null);
   const [asignacionObra, setAsignacionObra] = useState(null);
   const [tecnicos, setTecnicos] = useState([]);
-  const [asignacionForm, setAsignacionForm] = useState({ tecnico: '', fecha: new Date().toISOString().slice(0, 10), hora_inicio: '09:00', hora_termino: '10:00' });
+  const [asignacionForm, setAsignacionForm] = useState({ tecnico: '', fecha_inicio: new Date().toISOString().slice(0, 10), fecha_termino: new Date().toISOString().slice(0, 10), hora_inicio: '09:00', hora_termino: '10:00' });
   const [guardandoAsignacion, setGuardandoAsignacion] = useState(false);
+  const [obraEditando, setObraEditando] = useState(null);
+  const [editForm, setEditForm] = useState({ nombre_obra: '', ubicacion_faena: '', fecha_inicio: '', fecha_termino_estimada: '', costo_estimado: '' });
+  const [solicitudes, setSolicitudes] = useState([]);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -84,6 +87,14 @@ export default function Dashboard() {
     }
   }, [tipoSeleccionado, estadoSeleccionado, busqueda]);
 
+  const cargarSolicitudes = useCallback(async () => {
+    try {
+      setSolicitudes(await obrasService.getSolicitudesCambio());
+    } catch (err) {
+      console.error('Error al cargar solicitudes de cambio:', err);
+    }
+  }, []);
+
   useEffect(() => {
     cargarResumenTipos();
   }, []);
@@ -91,6 +102,10 @@ export default function Dashboard() {
   useEffect(() => {
     cargarObras();
   }, [cargarObras]);
+
+  useEffect(() => {
+    cargarSolicitudes();
+  }, [cargarSolicitudes]);
 
   const handleSolicitarTransicion = (obra, transicion) => {
     setModalData({
@@ -111,6 +126,45 @@ export default function Dashboard() {
     }
   };
 
+  const abrirEdicion = (obra) => {
+    setObraEditando(obra);
+    setEditForm({
+      nombre_obra: obra.nombre_obra || '',
+      ubicacion_faena: obra.ubicacion_faena || '',
+      fecha_inicio: obra.fecha_inicio || '',
+      fecha_termino_estimada: obra.fecha_termino_estimada || '',
+      costo_estimado: obra.costo_estimado ?? '',
+    });
+  };
+
+  const guardarEdicion = async (event) => {
+    event.preventDefault();
+    try {
+      await obrasService.actualizarObra(obraEditando.id_obra, {
+        ...editForm,
+        costo_estimado: Number(editForm.costo_estimado) || 0,
+        fecha_termino_estimada: editForm.fecha_termino_estimada || null,
+      });
+      setObraEditando(null);
+      setNotificacion({ tipo: 'exito', mensaje: 'Detalles de la obra actualizados.' });
+      await cargarObras();
+    } catch (err) {
+      const data = err.response?.data;
+      setNotificacion({ tipo: 'error', mensaje: data?.detail || 'No se pudieron actualizar los detalles de la obra.' });
+    }
+  };
+
+  const resolverSolicitud = async (solicitud, accion) => {
+    try {
+      await obrasService.resolverSolicitudCambio(solicitud.id_solicitud, accion);
+      setNotificacion({ tipo: 'exito', mensaje: `Solicitud ${accion === 'APROBAR' ? 'aprobada' : 'rechazada'}.` });
+      await Promise.all([cargarObras(), cargarSolicitudes(), cargarResumenTipos()]);
+    } catch (err) {
+      const data = err.response?.data;
+      setNotificacion({ tipo: 'error', mensaje: data?.detail || data?.error || 'No se pudo resolver la solicitud.' });
+    }
+  };
+
   const guardarAsignacion = async (event) => {
     event.preventDefault();
     setGuardandoAsignacion(true);
@@ -118,6 +172,7 @@ export default function Dashboard() {
       await obrasService.asignarTecnico({ obra: asignacionObra.id_obra, ...asignacionForm });
       setAsignacionObra(null);
       setNotificacion({ tipo: 'exito', mensaje: 'Técnico asignado al horario.' });
+      await cargarObras();
     } catch (err) {
       const data = err.response?.data;
       setNotificacion({ tipo: 'error', mensaje: data?.horario?.[0] || data?.detail || 'No se pudo asignar el técnico. Revisa que no tenga otra obra en ese horario.' });
@@ -185,6 +240,32 @@ export default function Dashboard() {
         >
         {notificacion.mensaje}
         </div>
+      )}
+
+      {solicitudes.filter((solicitud) => solicitud.estado === 'PENDIENTE').length > 0 && (
+        <section className="solicitudes-panel" aria-label="Solicitudes de técnicos">
+          <div className="solicitudes-panel-header">
+            <div>
+              <h2>Solicitudes de técnicos</h2>
+              <p>Revisa y resuelve las solicitudes de suspensión o cancelación.</p>
+            </div>
+          </div>
+          <div className="solicitudes-lista">
+            {solicitudes.filter((solicitud) => solicitud.estado === 'PENDIENTE').map((solicitud) => (
+              <article className="solicitud-item" key={solicitud.id_solicitud}>
+                <div>
+                  <strong>{solicitud.tipo === 'SUSPENSION' ? 'Suspensión' : 'Cancelación'} · {solicitud.obra_codigo}</strong>
+                  <span>{solicitud.obra_nombre} · Técnico: {solicitud.tecnico_nombre}</span>
+                  <p>{solicitud.motivo}</p>
+                </div>
+                <div className="solicitud-actions">
+                  <button type="button" className="btn-primary" onClick={() => resolverSolicitud(solicitud, 'APROBAR')}>Aprobar</button>
+                  <button type="button" className="btn-secondary" onClick={() => resolverSolicitud(solicitud, 'RECHAZAR')}>Rechazar</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
 
       <ClasificacionServicios
@@ -288,6 +369,7 @@ export default function Dashboard() {
               obra={obra}
               onSolicitarTransicion={handleSolicitarTransicion}
               onAsignarTecnico={abrirAsignacion}
+              onEditarObra={abrirEdicion}
             />
           ))}
         </div>
@@ -301,11 +383,21 @@ export default function Dashboard() {
         onClose={() => setModalData({ isOpen: false, obra: null, transicion: null })}
         onConfirmar={handleConfirmarTransicion}
       />
+      {obraEditando && <div role="presentation" onClick={() => setObraEditando(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, .55)', zIndex: 100, display: 'grid', placeItems: 'center', padding: '1rem' }}>
+        <form onSubmit={guardarEdicion} onClick={(event) => event.stopPropagation()} style={{ width: 'min(520px, 100%)', background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', display: 'grid', gap: '1rem' }}>
+          <h2 style={{ margin: 0 }}>Editar obra · {obraEditando.codigo_obra}</h2>
+          <label>Nombre de la obra<input required type="text" value={editForm.nombre_obra} onChange={(e) => setEditForm({ ...editForm, nombre_obra: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label>
+          <label>Ubicación de faena<input required type="text" value={editForm.ubicacion_faena} onChange={(e) => setEditForm({ ...editForm, ubicacion_faena: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label>
+          <div style={{ display: 'flex', gap: '.75rem' }}><label style={{ flex: 1 }}>Fecha de inicio<input required type="date" value={editForm.fecha_inicio} onChange={(e) => setEditForm({ ...editForm, fecha_inicio: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label><label style={{ flex: 1 }}>Término estimado<input type="date" value={editForm.fecha_termino_estimada} onChange={(e) => setEditForm({ ...editForm, fecha_termino_estimada: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label></div>
+          <label>Presupuesto estimado<input required min="0" type="number" value={editForm.costo_estimado} onChange={(e) => setEditForm({ ...editForm, costo_estimado: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}><button type="button" className="btn-secondary" onClick={() => setObraEditando(null)}>Cancelar</button><button type="submit" className="btn-primary">Guardar cambios</button></div>
+        </form>
+      </div>}
       {asignacionObra && <div role="presentation" onClick={() => setAsignacionObra(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, .55)', zIndex: 100, display: 'grid', placeItems: 'center', padding: '1rem' }}>
         <form onSubmit={guardarAsignacion} onClick={(event) => event.stopPropagation()} style={{ width: 'min(440px, 100%)', background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', display: 'grid', gap: '1rem' }}>
           <h2 style={{ margin: 0 }}>Asignar técnico · {asignacionObra.codigo_obra}</h2>
           <label>Técnico<select required value={asignacionForm.tecnico} onChange={(e) => setAsignacionForm({ ...asignacionForm, tecnico: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }}><option value="">Selecciona un técnico</option>{tecnicos.map((tecnico) => <option key={tecnico.id} value={tecnico.id}>{tecnico.nombre}</option>)}</select></label>
-          <label>Fecha<input required type="date" value={asignacionForm.fecha} onChange={(e) => setAsignacionForm({ ...asignacionForm, fecha: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label>
+          <div style={{ display: 'flex', gap: '.75rem' }}><label style={{ flex: 1 }}>Desde<input required type="date" value={asignacionForm.fecha_inicio} onChange={(e) => setAsignacionForm({ ...asignacionForm, fecha_inicio: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label><label style={{ flex: 1 }}>Hasta<input required type="date" value={asignacionForm.fecha_termino} onChange={(e) => setAsignacionForm({ ...asignacionForm, fecha_termino: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label></div>
           <div style={{ display: 'flex', gap: '.75rem' }}><label style={{ flex: 1 }}>Desde<input required type="time" value={asignacionForm.hora_inicio} onChange={(e) => setAsignacionForm({ ...asignacionForm, hora_inicio: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label><label style={{ flex: 1 }}>Hasta<input required type="time" value={asignacionForm.hora_termino} onChange={(e) => setAsignacionForm({ ...asignacionForm, hora_termino: e.target.value })} style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label></div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}><button type="button" className="btn-secondary" onClick={() => setAsignacionObra(null)}>Cancelar</button><button type="submit" className="btn-primary" disabled={guardandoAsignacion || !tecnicos.length}>{guardandoAsignacion ? 'Guardando…' : 'Confirmar asignación'}</button></div>
         </form>
