@@ -34,7 +34,7 @@ function Login() {
         navigate('/vista-tecnico')
       }
       else if (authService.tieneRol('Administrativo')) {
-        navigate('/dashboard-obras')
+        navigate('/vista-administrativo')
         //reemplazar dashboard de obras x la ruta q corresponda para los administrativos, plssss
       }
     } catch (err) {

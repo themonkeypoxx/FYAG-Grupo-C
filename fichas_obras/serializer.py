@@ -1,3 +1,5 @@
+from decimal import Decimal
+import uuid
 from rest_framework import serializers
 from .models import *
 from .validators import validar_rut
@@ -214,10 +216,86 @@ class SolicitudCambioObraSerializer(serializers.ModelSerializer):
 
 
 class PresupuestoSerializer(serializers.ModelSerializer):
+    cliente_razon_social = serializers.CharField(source="cliente.razon_social", read_only=True)
+    cliente_rut = serializers.CharField(source="cliente.rut_empresa", read_only=True)
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
+    obra_estado = serializers.CharField(source="obra.estado_obra.descripcion", read_only=True)
+    creador_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = Presupuesto
         fields = "__all__"
-        read_only_fields = ["id_presupuesto"]
+        read_only_fields = [
+            "id_presupuesto",
+            "creador",
+            "monto_iva",
+            "monto_total",
+            "soft_deleted",
+        ]
+        extra_kwargs = {
+            "cliente": {"required": False},
+            "numero_presupuesto": {"required": False},
+        }
+
+    def get_creador_nombre(self, obj):
+        if not obj.creador:
+            return ""
+        full = obj.creador.get_full_name()
+        return full if full else obj.creador.username
+
+    def validate(self, attrs):
+        obra = attrs.get("obra") or (self.instance.obra if self.instance else None)
+        cliente = attrs.get("cliente") or (self.instance.cliente if self.instance else None)
+
+        if not obra:
+            raise serializers.ValidationError({"obra": "Debe vincular el presupuesto a un proyecto u obra."})
+
+        # 1. Validación de proyecto activo
+        if obra.soft_deleted:
+            raise serializers.ValidationError({"obra": "El proyecto seleccionado ha sido eliminado o no está disponible."})
+
+        codigo_estado = obra.estado_obra.codigo_estado.upper() if obra.estado_obra else ""
+        if codigo_estado in ["FINALIZADA", "CANCELADA"]:
+            desc_estado = obra.estado_obra.descripcion if obra.estado_obra else codigo_estado
+            raise serializers.ValidationError({
+                "obra": f"No se puede registrar un presupuesto para un proyecto inactivo (estado actual: {desc_estado})."
+            })
+
+        # 2. Vinculación con el cliente
+        # Si no se envió cliente explícito, se vincula automáticamente el cliente del proyecto
+        if not cliente:
+            cliente = obra.cliente
+            attrs["cliente"] = cliente
+        else:
+            # Si se envió cliente, debe coincidir con el cliente del proyecto
+            if cliente != obra.cliente:
+                raise serializers.ValidationError({
+                    "cliente": "El cliente seleccionado no coincide con el cliente asociado al proyecto."
+                })
+
+        # 3. Validación de cliente activo
+        if cliente.soft_deleted or cliente.estado_cliente != Cliente.EstadoCliente.ACTIVO:
+            raise serializers.ValidationError({
+                "cliente": f"El cliente '{cliente.razon_social}' debe estar activo para registrar un presupuesto (estado actual: {cliente.estado_cliente})."
+            })
+
+        # 4. Generación automática del número de presupuesto si no se proporciona
+        numero = attrs.get("numero_presupuesto")
+        if not numero and not (self.instance and self.instance.numero_presupuesto):
+            correlativo = uuid.uuid4().hex[:6].upper()
+            attrs["numero_presupuesto"] = f"PRE-{obra.codigo_obra}-{correlativo}"
+
+        # 5. Cálculo coherente de montos (subtotal, IVA 19%, total)
+        subtotal = attrs.get("subtotal")
+        if subtotal is not None:
+            subtotal_decimal = Decimal(str(subtotal))
+            iva = round(subtotal_decimal * Decimal("0.19"), 2)
+            total = subtotal_decimal + iva
+            attrs["monto_iva"] = iva
+            attrs["monto_total"] = total
+
+        return attrs
 
 
 class ItemPresupuestoSerializer(serializers.ModelSerializer):
@@ -228,17 +306,68 @@ class ItemPresupuestoSerializer(serializers.ModelSerializer):
 
 
 class FacturaSerializer(serializers.ModelSerializer):
+    cliente_razon_social = serializers.CharField(source="cliente.razon_social", read_only=True)
+    cliente_rut = serializers.CharField(source="cliente.rut_empresa", read_only=True)
+    numero_presupuesto = serializers.CharField(source="presupuesto.numero_presupuesto", read_only=True)
+
     class Meta:
         model = Factura
         fields = "__all__"
         read_only_fields = ["id_factura"]
+        extra_kwargs = {
+            "cliente": {"required": False},
+        }
+
+    def validate(self, attrs):
+        presupuesto = attrs.get("presupuesto") or (self.instance.presupuesto if self.instance else None)
+        if presupuesto and not attrs.get("cliente"):
+            attrs["cliente"] = presupuesto.cliente
+
+        monto_total = attrs.get("monto_total") or (self.instance.monto_total if self.instance else None)
+        saldo = attrs.get("saldo_pendiente")
+
+        if self.instance is None and saldo is None and monto_total is not None:
+            attrs["saldo_pendiente"] = monto_total
+
+        estado = attrs.get("estado_pago")
+        if estado:
+            if estado == Factura.EstadoPago.PAGADO:
+                attrs["saldo_pendiente"] = Decimal("0.00")
+            elif estado == Factura.EstadoPago.PENDIENTE and monto_total is not None and saldo is None:
+                attrs["saldo_pendiente"] = monto_total
+
+        return attrs
 
 
 class RegistroPagoSerializer(serializers.ModelSerializer):
+    folio_factura = serializers.CharField(source="factura.folio_factura", read_only=True)
+    registrador_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = RegistroPago
         fields = "__all__"
         read_only_fields = ["id_pago", "fecha_pago", "registrador"]
+
+    def get_registrador_nombre(self, obj):
+        if not obj.registrador:
+            return ""
+        full = obj.registrador.get_full_name()
+        return full if full else obj.registrador.username
+
+    def validate(self, attrs):
+        factura = attrs.get("factura") or (self.instance.factura if self.instance else None)
+        monto = attrs.get("monto_abonado")
+
+        if factura:
+            if factura.estado_pago == Factura.EstadoPago.PAGADO or factura.saldo_pendiente <= Decimal("0.00"):
+                raise serializers.ValidationError({"monto_abonado": "La factura ya se encuentra pagada en su totalidad."})
+
+            if monto and monto > factura.saldo_pendiente:
+                raise serializers.ValidationError({
+                    "monto_abonado": f"El monto abonado (${monto}) no puede exceder el saldo pendiente (${factura.saldo_pendiente})."
+                })
+
+        return attrs
 
 
 

@@ -3,7 +3,7 @@ import obrasService from '../Servicios/obrasService';
 import AuthService from '../Servicios/AuthService';
 
 const fechaLocal = (fecha) => {
-  const v alor = new Date(fecha);
+  const valor = new Date(fecha);
   valor.setHours(12, 0, 0, 0);
   return valor;
 };
