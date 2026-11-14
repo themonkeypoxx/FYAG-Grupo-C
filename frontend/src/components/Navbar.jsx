@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import authService from '../Servicios/authService';
 
 export default function Navbar() {
   const location = useLocation();
+  const puedePresupuestar = authService.tieneRol('Gerencial', 'Administrativo');
 
   return (
     <header className="navbar">
@@ -22,12 +24,14 @@ export default function Navbar() {
           >
             Dashboard
           </Link>
-          <Link
-            to="/nuevo-presupuesto"
-            className={`nav-link ${location.pathname === '/nuevo-presupuesto' ? 'active' : ''}`}
-          >
-            + Presupuesto
-          </Link>
+          {puedePresupuestar && (
+            <Link
+              to="/nuevo-presupuesto"
+              className={`nav-link ${location.pathname === '/nuevo-presupuesto' ? 'active' : ''}`}
+            >
+              + Presupuesto
+            </Link>
+          )}
           <Link
             to="/nueva-obra"
             className="btn-primary"

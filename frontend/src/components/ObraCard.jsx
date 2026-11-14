@@ -1,9 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import authService from '../Servicios/authService';
 
 export default function ObraCard({ obra, onSolicitarTransicion }) {
   const transiciones = obra.transiciones_posibles || [];
   const esTerminal = ['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo);
+  const puedePresupuestar = authService.tieneRol('Gerencial', 'Administrativo');
 
   // Formato chileno de moneda
   const formatearMonto = (monto) => {
@@ -75,7 +77,7 @@ export default function ObraCard({ obra, onSolicitarTransicion }) {
 
       {/* Barra inferior de transición de estados operativos y acciones */}
       <div className="card-actions">
-        {!esTerminal && (
+        {!esTerminal && puedePresupuestar && (
           <Link
             to="/nuevo-presupuesto"
             state={{ obraId: obra.id_obra }}
