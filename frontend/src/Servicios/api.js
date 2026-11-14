@@ -28,28 +28,63 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 // ─── INTERCEPTOR DE RESPONSE ──────
+let estaRenovando = false;
+let colaEspera = []; //estas variables son las que servirán para el refresh del token JWT
+
 api.interceptors.response.use(
-    // Si la respuesta es exitosa (2xx), la pasamos directo sin tocarla
     (response) => response,
-
-    // Si hay un error en la respuesta...
-    (error) => {
-        if (error.response?.status === 401) {
-            // 401 = No autorizado (token expirado o inválido)
-            // Limpiamos la sesión para que el usuario vuelva a loguearse
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            localStorage.removeItem('user_data');
-
-            // Redirigimos al login x mientras (window.location es más directo que useNavigate aquí)
-            window.location.href = '/login';
+    async (error) => {
+        const requestOriginal = error.config;
+        // Si es 401 y NO es ya el intento de refresh (evitar loop infinito)
+        if (error.response?.status === 401 && !requestOriginal._yaIntentóRenovar) {
+            requestOriginal._yaIntentóRenovar = true;
+            if (estaRenovando) {
+                // Otros requests que llegaron mientras se renovaba: ponerlos en cola
+                return new Promise((resolve, reject) => {
+                    colaEspera.push({ resolve, reject });
+                }).then((nuevoToken) => {
+                    requestOriginal.headers['Authorization'] = `Bearer ${nuevoToken}`;
+                    return api(requestOriginal);
+                });
+            }
+            estaRenovando = true;
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) {
+                // Sin refresh token: logout
+                localStorage.clear();
+                window.location.href = '/login';
+                return Promise.reject(error);
+            }
+            try {
+                const { data } = await axios.post(
+                    'http://127.0.0.1:8000/api/auth/refresh/',
+                    { refresh: refreshToken }
+                );
+                const nuevoAccess = data.access;
+                localStorage.setItem('access_token', nuevoAccess);
+                // Si el backend devuelve un nuevo refresh token (ROTATE_REFRESH_TOKENS: True)
+                if (data.refresh) {
+                    localStorage.setItem('refresh_token', data.refresh);
+                }
+                // Desbloquear la cola de requests pendientes
+                colaEspera.forEach(({ resolve }) => resolve(nuevoAccess));
+                colaEspera = [];
+                // Reintentar el request original con el nuevo token
+                requestOriginal.headers['Authorization'] = `Bearer ${nuevoAccess}`;
+                return api(requestOriginal);
+            } catch (errorRenovacion) {
+                // El refresh token también expiró: logout real
+                colaEspera.forEach(({ reject }) => reject(errorRenovacion));
+                colaEspera = [];
+                localStorage.clear();
+                window.location.href = '/login';
+                return Promise.reject(errorRenovacion);
+            } finally {
+                estaRenovando = false;
+            }
         }
-
         // Para otros errores (403, 404, 500...) los dejamos pasar
-        // para que cada componente los maneje como quiera
-        // eso m dijo tío claude (me está enseñando....)
         return Promise.reject(error);
     }
-
 );
 export default api;
