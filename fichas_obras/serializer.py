@@ -306,17 +306,61 @@ class ItemPresupuestoSerializer(serializers.ModelSerializer):
 
 
 class FacturaSerializer(serializers.ModelSerializer):
+    cliente_razon_social = serializers.CharField(source="cliente.razon_social", read_only=True)
+    cliente_rut = serializers.CharField(source="cliente.rut_empresa", read_only=True)
+    numero_presupuesto = serializers.CharField(source="presupuesto.numero_presupuesto", read_only=True)
+
     class Meta:
         model = Factura
         fields = "__all__"
         read_only_fields = ["id_factura"]
 
+    def validate(self, attrs):
+        monto_total = attrs.get("monto_total") or (self.instance.monto_total if self.instance else None)
+        saldo = attrs.get("saldo_pendiente")
+
+        if self.instance is None and saldo is None and monto_total is not None:
+            attrs["saldo_pendiente"] = monto_total
+
+        estado = attrs.get("estado_pago")
+        if estado:
+            if estado == Factura.EstadoPago.PAGADO:
+                attrs["saldo_pendiente"] = Decimal("0.00")
+            elif estado == Factura.EstadoPago.PENDIENTE and monto_total is not None and saldo is None:
+                attrs["saldo_pendiente"] = monto_total
+
+        return attrs
+
 
 class RegistroPagoSerializer(serializers.ModelSerializer):
+    folio_factura = serializers.CharField(source="factura.folio_factura", read_only=True)
+    registrador_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = RegistroPago
         fields = "__all__"
         read_only_fields = ["id_pago", "fecha_pago", "registrador"]
+
+    def get_registrador_nombre(self, obj):
+        if not obj.registrador:
+            return ""
+        full = obj.registrador.get_full_name()
+        return full if full else obj.registrador.username
+
+    def validate(self, attrs):
+        factura = attrs.get("factura") or (self.instance.factura if self.instance else None)
+        monto = attrs.get("monto_abonado")
+
+        if factura:
+            if factura.estado_pago == Factura.EstadoPago.PAGADO or factura.saldo_pendiente <= Decimal("0.00"):
+                raise serializers.ValidationError({"monto_abonado": "La factura ya se encuentra pagada en su totalidad."})
+
+            if monto and monto > factura.saldo_pendiente:
+                raise serializers.ValidationError({
+                    "monto_abonado": f"El monto abonado (${monto}) no puede exceder el saldo pendiente (${factura.saldo_pendiente})."
+                })
+
+        return attrs
 
 
 
