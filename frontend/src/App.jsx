@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NuevaObra from './pages/NuevaObra';
+import NuevoPresupuesto from './pages/NuevoPresupuesto';
 import AccesoDenegado from './pages/AccesoDenegado';
 import RutaProtegida from './Servicios/RutaProtegida';
 import VistaTecnico from './pages/Vista-tecnico';
@@ -66,8 +67,17 @@ function Layout() {
         />
 
         <Route
-          path="/vista-tecnico"
-          element={<RutaProtegida roles={['Gerencial', 'Tecnico']}><VistaTecnico /></RutaProtegida>}
+          path="/nuevo-presupuesto"
+          element={
+            <RutaProtegida roles={['Gerencial', 'Supervisor', 'Administrativo']}>
+              <NuevoPresupuesto />
+            </RutaProtegida>
+          }
+        <Route
+           path="/vista-tecnico"
+          element={<RutaProtegida roles={['Gerencial', 'Tecnico']}>
+            <VistaTecnico />
+            </RutaProtegida>}
         />
 
         {/* Ruta directa para error 403 Forbidden / Acceso Denegado */}

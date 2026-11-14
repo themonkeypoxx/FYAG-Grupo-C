@@ -88,6 +88,13 @@ class Crud_obras(viewsets.ModelViewSet):
                 | Q(cliente__razon_social__icontains=search)
             )
 
+        # 5. Filtro para proyectos activos (no finalizados, no cancelados, no eliminados)
+        solo_activas = params.get("solo_activas")
+        if solo_activas in ["true", "True", "1"]:
+            queryset = queryset.filter(soft_deleted=False).exclude(
+                estado_obra__codigo_estado__in=["FINALIZADA", "CANCELADA"]
+            )
+
         return queryset
 
     @action(detail=True, methods=["post"], url_path="cambiar-estado")
@@ -414,9 +421,33 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
 class PresupuestoViewSet(viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo | EsSupervisor]
     serializer_class = PresupuestoSerializer
-    queryset = Presupuesto.objects.select_related(
-        "obra", "cliente", "creador", "aprobador_gerencia"
-    ).all()
+
+    def get_queryset(self):
+        queryset = (
+            Presupuesto.objects.select_related(
+                "obra", "cliente", "creador", "aprobador_gerencia", "obra__estado_obra"
+            )
+            .filter(soft_deleted=False)
+            .order_by("-id_presupuesto")
+        )
+        params = self.request.query_params
+        obra_id = params.get("obra") or params.get("id_obra")
+        if obra_id:
+            queryset = queryset.filter(obra_id=obra_id)
+
+        cliente_id = params.get("cliente") or params.get("id_cliente")
+        if cliente_id:
+            queryset = queryset.filter(cliente_id=cliente_id)
+
+        estado = params.get("estado_presupuesto")
+        if estado:
+            queryset = queryset.filter(estado_presupuesto=estado)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        # Asignar automáticamente el creador como el usuario autenticado
+        serializer.save(creador=self.request.user)
 
 
 class ItemPresupuestoViewSet(viewsets.ModelViewSet):

@@ -1,10 +1,12 @@
-import React from 'react';
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import authService from '../Servicios/authService';
 
 export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico, onEditarObra }) {
   const transiciones = obra.transiciones_posibles || [];
   const tecnicosAsignados = obra.tecnicos_asignados || [];
   const esTerminal = ['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo);
+  const puedePresupuestar = authService.tieneRol('Gerencial', 'Administrativo');
 
   //esto es para formatear los horarios cndo semuestran los tecnicos asignados
   const formatear = (a) =>
@@ -124,8 +126,26 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
         )}
       </div>
 
-      {/* Barra inferior de transición de estados operativos */}
+      {/* Barra inferior de transición de estados operativos y acciones */}
       <div className="card-actions">
+        {!esTerminal && puedePresupuestar && (
+          <Link
+            to="/nuevo-presupuesto"
+            state={{ obraId: obra.id_obra }}
+            className="transicion-btn"
+            style={{
+              textDecoration: 'none',
+              background: '#eff6ff',
+              color: '#1d4ed8',
+              borderColor: '#bfdbfe',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+            }}
+          >
+            💰 + Presupuesto
+          </Link>
+        )}
         {onEditarObra && <button type="button" className="btn-secondary" onClick={() => onEditarObra(obra)}>Editar detalles</button>}
         {onAsignarTecnico && <button type="button" className="btn-primary" onClick={() => onAsignarTecnico(obra)}>Asignar técnico</button>}
         {transiciones.length > 0 ? (
@@ -147,5 +167,6 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
       </div>
     </article>
   );
+}
 }
 
