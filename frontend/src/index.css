@@ -55,3 +55,48 @@ button {
 input, select, textarea {
   font-family: inherit;
 }
+
+/* Tarjetas del horario: el fondo y el borde identifican el estado operativo. */
+.horario-obras {
+  display: grid;
+  gap: .65rem;
+}
+
+.horario-card {
+  position: relative;
+  padding: .7rem;
+  border-radius: 6px;
+  border-left: 4px solid var(--border);
+  background: var(--surface);
+}
+
+.horario-card.PENDIENTE { border-left-color: var(--estado-pendiente); background: var(--estado-pendiente-bg); }
+.horario-card.EJECUCION { border-left-color: var(--estado-ejecucion); background: var(--estado-ejecucion-bg); }
+.horario-card.SUSPENDIDA { border-left-color: var(--estado-suspendida); background: var(--estado-suspendida-bg); }
+.horario-card.FINALIZADA { border-left-color: var(--estado-finalizada); background: var(--estado-finalizada-bg); }
+.horario-card.CANCELADA { border-left-color: var(--estado-cancelada); background: var(--estado-cancelada-bg); }
+
+.horario-card-title {
+  font-weight: 700;
+  margin-top: .25rem;
+  padding-right: 1rem;
+}
+
+/* La bolita identifica el tipo de servicio y no reemplaza el color del estado. */
+.tipo-indicador {
+  position: absolute;
+  top: .55rem;
+  right: .55rem;
+  width: .7rem;
+  height: .7rem;
+  border-radius: 50%;
+  background: var(--text-muted);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 75%);
+}
+
+.tipo-indicador.CLIMATIZACION { background: var(--tipo-clima); }
+.tipo-indicador.MANTENCION { background: var(--tipo-mant); }
+.tipo-indicador.PROY_ELECTRICO { background: var(--tipo-elec); }
+.tipo-indicador.EMERGENCIA { background: var(--tipo-emerg); }
+.tipo-indicador.GARANTIA { background: var(--tipo-garan); }
+.tipo-indicador.PROYECTO { background: var(--tipo-proy); }

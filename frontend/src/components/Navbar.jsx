@@ -4,7 +4,13 @@ import authService from '../Servicios/authService';
 
 export default function Navbar() {
   const location = useLocation();
-  const puedePresupuestar = authService.tieneRol('Gerencial', 'Administrativo');
+  const puedePresupuestar = authService.tieneRol('Gerencia', 'Administrativo');
+  const esTecnico = authService.tieneRol('Tecnico');
+
+  const linkPrincipalActivo =
+    location.pathname === '/' ||
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname === '/vista-tecnico';
 
   return (
     <header className="navbar">
@@ -19,11 +25,12 @@ export default function Navbar() {
 
         <nav className="nav-links">
           <Link
-            to="/dashboard"
-            className={`nav-link ${location.pathname === '/dashboard' || location.pathname === '/' ? 'active' : ''}`}
+            to={esTecnico ? '/vista-tecnico' : '/dashboard-obras'}
+            className={`nav-link ${linkPrincipalActivo ? 'active' : ''}`}
           >
-            Dashboard
+            {esTecnico ? 'Mi horario' : 'Obras'}
           </Link>
+
           {puedePresupuestar && (
             <Link
               to="/nuevo-presupuesto"
@@ -32,12 +39,15 @@ export default function Navbar() {
               + Presupuesto
             </Link>
           )}
-          <Link
-            to="/nueva-obra"
-            className="btn-primary"
-          >
-            + Nueva Obra
-          </Link>
+
+          {!esTecnico && (
+            <Link
+              to="/nueva-obra"
+              className="btn-primary"
+            >
+              + Nueva Obra
+            </Link>
+          )}
         </nav>
       </div>
     </header>

@@ -27,7 +27,11 @@ export default function ModalCambiarEstado({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-content modal-cambiar-estado"
+        style={{ backgroundColor: '#ffffff', background: '#ffffff' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <h3>Transición de Estado Operativo</h3>
           <button className="modal-close" onClick={onClose} disabled={cargando}>

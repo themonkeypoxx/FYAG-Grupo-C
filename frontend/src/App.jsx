@@ -7,6 +7,7 @@ import NuevaObra from './pages/NuevaObra';
 import NuevoPresupuesto from './pages/NuevoPresupuesto';
 import AccesoDenegado from './pages/AccesoDenegado';
 import RutaProtegida from './Servicios/RutaProtegida';
+import VistaTecnico from './pages/Vista-tecnico';
 import './App.css';
 
 function Layout() {
@@ -26,7 +27,7 @@ function Layout() {
           al dashboard o al registro de auditoría, el sistema valida el rol y muestra 403 Forbidden.
         */}
         <Route
-          path="/dashboard"
+          path="/dashboard-obras"
           element={
             <RutaProtegida roles={['Gerencial', 'Supervisor']}> {/* Añadí esto xq daría problemas más adelante - Ismael !!*/}
               <Dashboard />
@@ -72,15 +73,22 @@ function Layout() {
               <NuevoPresupuesto />
             </RutaProtegida>
           }
+        <Route
+           path="/vista-tecnico"
+          element={<RutaProtegida roles={['Gerencial', 'Tecnico']}>
+            <VistaTecnico />
+            </RutaProtegida>}
         />
 
         {/* Ruta directa para error 403 Forbidden / Acceso Denegado */}
         <Route path="/acceso-denegado" element={<AccesoDenegado />} />
         <Route path="/403" element={<AccesoDenegado />} />
+
       </Routes>
-    </>
+    </>  
   );
 }
+
 
 function App() {
   return (
