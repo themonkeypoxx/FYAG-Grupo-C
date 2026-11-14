@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NuevaObra from './pages/NuevaObra';
+import NuevoPresupuesto from './pages/NuevoPresupuesto';
 import AccesoDenegado from './pages/AccesoDenegado';
 import RutaProtegida from './Servicios/RutaProtegida';
 import './App.css';
@@ -60,6 +61,15 @@ function Layout() {
           element={
             <RutaProtegida roles={['Gerencial', 'Supervisor']}>
               <NuevaObra />
+            </RutaProtegida>
+          }
+        />
+
+        <Route
+          path="/nuevo-presupuesto"
+          element={
+            <RutaProtegida roles={['Gerencial', 'Supervisor', 'Administrativo']}>
+              <NuevoPresupuesto />
             </RutaProtegida>
           }
         />
