@@ -1,11 +1,12 @@
 from datetime import date
+from decimal import Decimal
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import Cliente, EstadoObra, Obra, TipoServicio
+from .models import Cliente, EstadoObra, Obra, TipoServicio, Presupuesto
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
 
@@ -398,3 +399,245 @@ class AccesoDenegadoPermisosTests(TestCase):
         """
         response = self.client.get(self.ENDPOINT_OBRAS)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+# ── Pruebas de Registro de Presupuestos (Vinculados a Cliente y Proyecto Activo) ──
+
+class RegistroPresupuestosTests(TestCase):
+    ENDPOINT_PRESUPUESTOS = "/obras/fyag/v1/presupuestos/"
+    ENDPOINT_OBRAS = "/obras/fyag/v1/obras/"
+
+    def setUp(self):
+        self.client = APIClient()
+
+        # Grupos
+        self.grupo_gerencia, _ = Group.objects.get_or_create(name="GERENCIA")
+        self.grupo_supervisor, _ = Group.objects.get_or_create(name="SUPERVISOR")
+        self.grupo_tecnico, _ = Group.objects.get_or_create(name="TECNICO")
+
+        # Usuarios
+        self.user_supervisor = User.objects.create_user(
+            username="sup_presupuestos",
+            password="Password_123"
+        )
+        self.user_supervisor.groups.add(self.grupo_supervisor)
+
+        self.user_tecnico = User.objects.create_user(
+            username="tec_presupuestos",
+            password="Password_123"
+        )
+        self.user_tecnico.groups.add(self.grupo_tecnico)
+
+        # Clientes
+        self.cliente_activo = Cliente.objects.create(
+            rut_empresa="76543210-K",
+            razon_social="Agrícola Frutícola del Sur SpA",
+            estado_cliente="Activo",
+        )
+        self.cliente_inactivo = Cliente.objects.create(
+            rut_empresa="76111222-3",
+            razon_social="Constructora Parada S.A.",
+            estado_cliente="Inactivo",
+        )
+        self.cliente_otro = Cliente.objects.create(
+            rut_empresa="77888999-4",
+            razon_social="Comercial Chillán Ltda.",
+            estado_cliente="Activo",
+        )
+
+        # Estados Obra
+        self.estado_ejecucion, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="EJECUCION", defaults={"descripcion": "En Ejecución"}
+        )
+        self.estado_pendiente, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="PENDIENTE", defaults={"descripcion": "Pendiente"}
+        )
+        self.estado_finalizada, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="FINALIZADA", defaults={"descripcion": "Finalizada"}
+        )
+        self.estado_cancelada, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="CANCELADA", defaults={"descripcion": "Cancelada"}
+        )
+
+        # Tipo Servicio
+        self.tipo_clima, _ = TipoServicio.objects.get_or_create(
+            codigo="CLIMATIZACION", defaults={"nombre_servicio": "Climatización"}
+        )
+
+        # Obras
+        self.obra_activa = Obra.objects.create(
+            codigo_obra="OBRA-ACT-001",
+            nombre_obra="Instalación Climatización Planta Chillán",
+            ubicacion_faena="Chillán",
+            fecha_inicio=date(2026, 3, 1),
+            cliente=self.cliente_activo,
+            tipo_servicio=self.tipo_clima,
+            estado_obra=self.estado_ejecucion,
+            supervisor=self.user_supervisor,
+        )
+
+        self.obra_finalizada = Obra.objects.create(
+            codigo_obra="OBRA-FIN-002",
+            nombre_obra="Mantención Completa Chiller",
+            ubicacion_faena="Chillán",
+            fecha_inicio=date(2026, 1, 1),
+            cliente=self.cliente_activo,
+            tipo_servicio=self.tipo_clima,
+            estado_obra=self.estado_finalizada,
+            supervisor=self.user_supervisor,
+        )
+
+        self.obra_cancelada = Obra.objects.create(
+            codigo_obra="OBRA-CANC-003",
+            nombre_obra="Proyecto Desistido",
+            ubicacion_faena="Chillán",
+            fecha_inicio=date(2026, 2, 1),
+            cliente=self.cliente_activo,
+            tipo_servicio=self.tipo_clima,
+            estado_obra=self.estado_cancelada,
+            supervisor=self.user_supervisor,
+        )
+
+        # Autenticación por defecto como supervisor
+        self.client.force_authenticate(user=self.user_supervisor)
+
+    def test_registro_presupuesto_exitoso_vinculado_cliente_y_proyecto_activo(self):
+        """
+        Registra exitosamente un presupuesto vinculado a un proyecto activo.
+        El cliente y creador se asocian de forma coherente y se calculan montos.
+        """
+        payload = {
+            "obra": str(self.obra_activa.id_obra),
+            "subtotal": "100000.00",
+            "estado_presupuesto": "Borrador",
+        }
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["obra"], self.obra_activa.id_obra)
+        self.assertEqual(res.data["cliente"], self.cliente_activo.id_cliente)
+        self.assertEqual(Decimal(str(res.data["monto_iva"])), Decimal("19000.00"))
+        self.assertEqual(Decimal(str(res.data["monto_total"])), Decimal("119000.00"))
+        self.assertTrue(res.data["numero_presupuesto"].startswith(f"PRE-{self.obra_activa.codigo_obra}"))
+
+        # Verificar persistencia en base de datos
+        presupuesto = Presupuesto.objects.get(id_presupuesto=res.data["id_presupuesto"])
+        self.assertEqual(presupuesto.obra, self.obra_activa)
+        self.assertEqual(presupuesto.cliente, self.cliente_activo)
+        self.assertEqual(presupuesto.creador, self.user_supervisor)
+
+    def test_registro_presupuesto_con_cliente_explicito_coincidente(self):
+        """
+        Permite registrar enviando explícitamente el cliente si coincide con el del proyecto.
+        """
+        payload = {
+            "obra": str(self.obra_activa.id_obra),
+            "cliente": str(self.cliente_activo.id_cliente),
+            "subtotal": "50000.00",
+        }
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["cliente"], self.cliente_activo.id_cliente)
+
+    def test_registro_presupuesto_falla_si_cliente_no_coincide_con_obra(self):
+        """
+        Rechaza el registro si se envía un cliente distinto al cliente vinculado a la obra.
+        """
+        payload = {
+            "obra": str(self.obra_activa.id_obra),
+            "cliente": str(self.cliente_otro.id_cliente),
+            "subtotal": "50000.00",
+        }
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cliente", res.data)
+
+    def test_registro_presupuesto_falla_si_proyecto_esta_finalizado(self):
+        """
+        Rechaza el registro de presupuesto si el proyecto está en estado terminal FINALIZADA.
+        """
+        payload = {
+            "obra": str(self.obra_finalizada.id_obra),
+            "subtotal": "75000.00",
+        }
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("obra", res.data)
+
+    def test_registro_presupuesto_falla_si_proyecto_esta_cancelado(self):
+        """
+        Rechaza el registro de presupuesto si el proyecto está en estado terminal CANCELADA.
+        """
+        payload = {
+            "obra": str(self.obra_cancelada.id_obra),
+            "subtotal": "75000.00",
+        }
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("obra", res.data)
+
+    def test_registro_presupuesto_falla_si_proyecto_esta_soft_deleted(self):
+        """
+        Rechaza el registro de presupuesto si el proyecto tiene soft_deleted=True.
+        """
+        self.obra_activa.soft_deleted = True
+        self.obra_activa.save()
+
+        payload = {
+            "obra": str(self.obra_activa.id_obra),
+            "subtotal": "10000.00",
+        }
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("obra", res.data)
+
+    def test_registro_presupuesto_falla_si_cliente_esta_inactivo(self):
+        """
+        Rechaza el registro de presupuesto si el cliente vinculado no está activo.
+        """
+        obra_cliente_inactivo = Obra.objects.create(
+            codigo_obra="OBRA-INACT-004",
+            nombre_obra="Obra Cliente Inactivo",
+            ubicacion_faena="Chillán",
+            fecha_inicio=date(2026, 4, 1),
+            cliente=self.cliente_inactivo,
+            tipo_servicio=self.tipo_clima,
+            estado_obra=self.estado_pendiente,
+            supervisor=self.user_supervisor,
+        )
+        payload = {
+            "obra": str(obra_cliente_inactivo.id_obra),
+            "subtotal": "20000.00",
+        }
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cliente", res.data)
+
+    def test_filtro_solo_obras_activas_en_api(self):
+        """
+        Verifica que el parámetro ?solo_activas=true solo retorne obras operativas no finalizadas ni canceladas.
+        """
+        res = self.client.get(f"{self.ENDPOINT_OBRAS}?solo_activas=true")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        codigos = [item["codigo_obra"] for item in res.data]
+        self.assertIn(self.obra_activa.codigo_obra, codigos)
+        self.assertNotIn(self.obra_finalizada.codigo_obra, codigos)
+        self.assertNotIn(self.obra_cancelada.codigo_obra, codigos)
+
+    def test_permisos_usuario_no_autenticado_recibe_401(self):
+        """
+        Usuario sin token recibe 401 Unauthorized al intentar registrar presupuesto.
+        """
+        self.client.force_authenticate(user=None)
+        payload = {"obra": str(self.obra_activa.id_obra), "subtotal": "10000.00"}
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_permisos_usuario_sin_rol_recibe_403(self):
+        """
+        Usuario con rol técnico (no administrativo ni gerencial ni supervisor) recibe 403 Forbidden.
+        """
+        self.client.force_authenticate(user=self.user_tecnico)
+        payload = {"obra": str(self.obra_activa.id_obra), "subtotal": "10000.00"}
+        res = self.client.post(self.ENDPOINT_PRESUPUESTOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+

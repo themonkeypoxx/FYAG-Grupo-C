@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 export default function ObraCard({ obra, onSolicitarTransicion }) {
   const transiciones = obra.transiciones_posibles || [];
@@ -72,8 +73,26 @@ export default function ObraCard({ obra, onSolicitarTransicion }) {
         )}
       </div>
 
-      {/* Barra inferior de transición de estados operativos */}
+      {/* Barra inferior de transición de estados operativos y acciones */}
       <div className="card-actions">
+        {!esTerminal && (
+          <Link
+            to="/nuevo-presupuesto"
+            state={{ obraId: obra.id_obra }}
+            className="transicion-btn"
+            style={{
+              textDecoration: 'none',
+              background: '#eff6ff',
+              color: '#1d4ed8',
+              borderColor: '#bfdbfe',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+            }}
+          >
+            💰 + Presupuesto
+          </Link>
+        )}
         {transiciones.length > 0 ? (
           transiciones.map((tr) => (
             <button

@@ -17,10 +17,16 @@ export default function Navbar() {
 
         <nav className="nav-links">
           <Link
-            to="/"
-            className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
+            to="/dashboard"
+            className={`nav-link ${location.pathname === '/dashboard' || location.pathname === '/' ? 'active' : ''}`}
           >
             Dashboard
+          </Link>
+          <Link
+            to="/nuevo-presupuesto"
+            className={`nav-link ${location.pathname === '/nuevo-presupuesto' ? 'active' : ''}`}
+          >
+            + Presupuesto
           </Link>
           <Link
             to="/nueva-obra"
