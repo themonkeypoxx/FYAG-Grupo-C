@@ -28,7 +28,7 @@ from .serializer import (
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
 class Crud_obras(viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsSupervisor]
+    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo]
     """
     CRUD principal de Obras con clasificación por tipo de servicio,
     búsqueda, filtros y máquina de estados operativos.
