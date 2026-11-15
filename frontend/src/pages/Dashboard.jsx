@@ -31,12 +31,6 @@ export default function Dashboard() {
   const [editForm, setEditForm] = useState({ nombre_obra: '', ubicacion_faena: '', fecha_inicio: '', fecha_termino_estimada: '', costo_estimado: '' });
   const [solicitudes, setSolicitudes] = useState([]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    navigate('/login');
-  };
-
   useEffect(() => {
     const notificacionRecibida = location.state?.notificacion;
     if (!notificacionRecibida) return;
@@ -212,15 +206,6 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem', padding: '1rem 0' }}>
-        <button 
-          onClick={handleLogout} 
-          style={{ padding: '8px 16px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
-        >
-          Cerrar Sesión
-        </button>
-      </div>
-
       {notificacion && (
         <div
           style={{

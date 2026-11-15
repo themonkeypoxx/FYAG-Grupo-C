@@ -30,6 +30,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .brand {
@@ -99,6 +101,48 @@
 
 .btn-primary:hover {
   background-color: var(--primary-hover);
+}
+
+/* Navbar Usuario y Cerrar Sesión */
+.navbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-left: 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--border);
+}
+
+.navbar-username {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-logout {
+  background-color: transparent;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  padding: 0.42rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.btn-logout:hover {
+  background-color: #fee2e2;
+  border-color: #ef4444;
+  color: #b91c1c;
 }
 
 /* Clasificación por Tipo de Servicio */

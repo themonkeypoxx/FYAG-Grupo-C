@@ -8,6 +8,11 @@ export default function Navbar() {
   const esAdministrativo = authService.tieneRol('Administrativo');
   const esGerencial = authService.tieneRol('Gerencial');
   const esSupervisor = authService.tieneRol('Supervisor');
+  const usuario = authService.getUsuario();
+
+  const handleLogout = () => {
+    authService.logout();
+  };
 
   const puedeAccederFinanzas = esGerencial || esAdministrativo;
 
@@ -79,6 +84,38 @@ export default function Navbar() {
               + Nueva Obra
             </Link>
           )}
+
+          <div className="navbar-user">
+            {usuario?.username && (
+              <span className="navbar-username" title={usuario.email || usuario.username}>
+                {usuario.username}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="btn-logout"
+              title="Cerrar sesión"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              <span>Cerrar Sesión</span>
+            </button>
+          </div>
         </nav>
       </div>
     </header>
