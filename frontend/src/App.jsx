@@ -7,6 +7,7 @@ import NuevaObra from './pages/NuevaObra';
 import NuevoPresupuesto from './pages/NuevoPresupuesto';
 import VistaTecnico from './pages/Vista-tecnico';
 import PanelAdministrativo from './pages/PanelAdministrativo';
+import ResumenFinanciero from './pages/ResumenFinanciero';
 import AccesoDenegado from './pages/AccesoDenegado';
 import RutaProtegida from './Servicios/RutaProtegida';
 import './App.css';
@@ -18,15 +19,11 @@ function Layout() {
   return (
     <>
       {!hideNavbar && <Navbar />}
+
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
 
-        {/* 
-          Rutas protegidas por rol (Criterio: Manipulación de URL):
-          En caso que un usuario no autorizado intente manipular la URL,
-          el sistema valida el rol y muestra 403 Forbidden.
-        */}
         <Route
           path="/dashboard-obras"
           element={
@@ -35,24 +32,30 @@ function Layout() {
             </RutaProtegida>
           }
         />
+
         <Route
           path="/auditoria"
           element={
             <RutaProtegida roles={['Gerencial']}>
               <div className="main-content" style={{ textAlign: 'center', padding: '3rem' }}>
                 <h2>Registro de Auditoría</h2>
-                <p style={{ color: 'var(--text-muted)' }}>Módulo de auditoría (confidencial - solo Gerencia).</p>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  Módulo de auditoría (confidencial - solo Gerencia).
+                </p>
               </div>
             </RutaProtegida>
           }
         />
+
         <Route
           path="/registro-auditoria"
           element={
             <RutaProtegida roles={['Gerencial']}>
               <div className="main-content" style={{ textAlign: 'center', padding: '3rem' }}>
                 <h2>Registro de Auditoría</h2>
-                <p style={{ color: 'var(--text-muted)' }}>Módulo de auditoría (confidencial - solo Gerencia).</p>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  Módulo de auditoría (confidencial - solo Gerencia).
+                </p>
               </div>
             </RutaProtegida>
           }
@@ -86,20 +89,24 @@ function Layout() {
         />
 
         <Route
-          path="/nuevo-presupuesto"
+          path="/resumen-financiero"
           element={
-            <RutaProtegida roles={['Gerencial', 'Supervisor', 'Administrativo']}>
-              <NuevoPresupuesto />
+            <RutaProtegida roles={['Gerencial', 'Administrativo']}>
+              <ResumenFinanciero />
             </RutaProtegida>
           }
         />
 
         <Route
-          path="/vista-tecnico"
-          element={<RutaProtegida roles={['Gerencial', 'Tecnico']}><VistaTecnico /></RutaProtegida>}
+          path="/nuevo-presupuesto"
+          element={
+            <RutaProtegida roles={['Gerencial', 'Administrativo']}>
+              <NuevoPresupuesto />
+            </RutaProtegida>
+          }
         />
 
-        {/* Ruta directa para error 403 Forbidden / Acceso Denegado */}
+
         <Route path="/acceso-denegado" element={<AccesoDenegado />} />
         <Route path="/403" element={<AccesoDenegado />} />
       </Routes>
