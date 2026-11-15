@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../Servicios/api';
 
 // Formato de moneda CLP
@@ -20,6 +20,8 @@ const BADGES_PAGO = {
 
 export default function PanelAdministrativo() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [notificacion, setNotificacion] = useState(null);
   const [pestanaActiva, setPestanaActiva] = useState('clientes'); // 'clientes' | 'facturas' | 'presupuestos'
 
   // -------------------------------------------------------------
@@ -131,6 +133,26 @@ export default function PanelAdministrativo() {
     cargarFacturas();
     cargarPresupuestos();
   }, []);
+
+  // Aviso que llega desde NuevoPresupuesto al registrar un presupuesto 
+  useEffect(() => {
+    const notificacionRecibida = location.state?.notificacion;
+    if (!notificacionRecibida) return;
+    setNotificacion(notificacionRecibida);
+    setPestanaActiva('presupuestos');
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    });
+  }, [location.state, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!notificacion) return;
+    const temporizador = setTimeout(() => {
+      setNotificacion(null);
+    }, 5000);
+    return () => clearTimeout(temporizador);
+  }, [notificacion]);
 
   // -------------------------------------------------------------
   // HANDLERS: Clientes
@@ -344,6 +366,23 @@ export default function PanelAdministrativo() {
           📄 + Registrar Presupuesto
         </button>
       </div>
+
+      {notificacion && (
+        <div
+          style={{
+            padding: '0.85rem 1rem',
+            marginBottom: '1.25rem',
+            borderRadius: '8px',
+            background: notificacion.tipo === 'exito' ? 'var(--estado-finalizada-bg)' : 'var(--estado-cancelada-bg)',
+            color: notificacion.tipo === 'exito' ? 'var(--estado-finalizada)' : 'var(--estado-cancelada)',
+            border: `1px solid ${notificacion.tipo === 'exito' ? '#bbf7d0' : '#fecaca'}`,
+            fontWeight: 600,
+            fontSize: '0.9rem',
+          }}
+        >
+          {notificacion.mensaje}
+        </div>
+      )}
 
       {/* Barra de Pestañas / Navegación Interna */}
       <div
