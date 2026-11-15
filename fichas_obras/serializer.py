@@ -316,6 +316,7 @@ class FacturaSerializer(serializers.ModelSerializer):
         read_only_fields = ["id_factura"]
         extra_kwargs = {
             "cliente": {"required": False},
+            "saldo_pendiente": {"required": False},
         }
 
     def validate(self, attrs):

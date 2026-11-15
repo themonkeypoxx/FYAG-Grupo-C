@@ -420,7 +420,7 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
 
 
 class PresupuestoViewSet(viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsAdministrativo | EsSupervisor]
+    permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = PresupuestoSerializer
 
     def get_queryset(self):

@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import presupuestosService from '../Servicios/presupuestosService';
+import authService from '../Servicios/authService';
 
 export default function NuevoPresupuesto() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  //El Administrativo vuelve a su panel y el resto al dashboard de obras.
+  const rutaVolver = authService.tieneRol('Administrativo') && !authService.tieneRol('Gerencial')
+    ? '/vista-administrativo'
+    : '/dashboard-obras';
 
   const [obrasActivas, setObrasActivas] = useState([]);
   const [cargandoObras, setCargandoObras] = useState(true);
@@ -116,7 +122,7 @@ export default function NuevoPresupuesto() {
 
       const respuesta = await presupuestosService.crearPresupuesto(payload);
 
-      navigate('/dashboard', {
+      navigate(rutaVolver, {
         state: {
           notificacion: {
             tipo: 'exito',
@@ -154,7 +160,7 @@ export default function NuevoPresupuesto() {
               Vinculación de presupuesto formal a cliente y proyecto activo
             </p>
           </div>
-          <Link to="/dashboard" className="btn-secondary" style={{ textDecoration: 'none' }}>
+          <Link to={rutaVolver} className="btn-secondary" style={{ textDecoration: 'none' }}>
             ← Volver al Dashboard
           </Link>
         </div>
@@ -345,7 +351,7 @@ export default function NuevoPresupuesto() {
 
             {/* Botones de acción */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
-              <Link to="/dashboard" className="btn-secondary" style={{ textDecoration: 'none' }}>
+              <Link to={rutaVolver} className="btn-secondary" style={{ textDecoration: 'none' }}>
                 Cancelar
               </Link>
               <button type="submit" className="btn-primary" disabled={guardando}>

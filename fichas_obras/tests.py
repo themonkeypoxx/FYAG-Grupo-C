@@ -849,3 +849,143 @@ class ActualizacionEstadoPagoFacturaTests(TestCase):
         self.factura.refresh_from_db()
         self.assertEqual(self.factura.estado_pago, "Pago Parcial")
         self.assertEqual(self.factura.saldo_pendiente, Decimal("50000.00"))
+
+
+
+class ResumenFinancieroTests(TestCase):
+    ENDPOINT = "/obras/fyag/v1/resumen-financiero/"
+    ENDPOINT_FACTURAS = "/obras/fyag/v1/facturas/"
+    ENDPOINT_PAGOS = "/obras/fyag/v1/pagos/"
+
+    def setUp(self):
+        self.client = APIClient()
+
+        self.grupo_gerencia, _ = Group.objects.get_or_create(name="GERENCIA")
+        self.user_admin = User.objects.create_user(
+            username="admin_resumen",
+            password="Password_123"
+        )
+        self.user_admin.groups.add(self.grupo_gerencia)
+        self.client.force_authenticate(user=self.user_admin)
+
+        self.cliente = Cliente.objects.create(
+            rut_empresa="76123456-7",
+            razon_social="Inversiones Maule S.A.",
+            estado_cliente="Activo",
+        )
+        self.estado_ejecucion, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="EJECUCION", defaults={"descripcion": "En Ejecución"}
+        )
+        self.tipo_clima, _ = TipoServicio.objects.get_or_create(
+            codigo="CLIMATIZACION", defaults={"nombre_servicio": "Climatización"}
+        )
+        self.obra = Obra.objects.create(
+            codigo_obra="OBRA-RES-001",
+            nombre_obra="Climatización Maule",
+            ubicacion_faena="Talca",
+            fecha_inicio=date(2026, 1, 1),
+            cliente=self.cliente,
+            tipo_servicio=self.tipo_clima,
+            estado_obra=self.estado_ejecucion,
+            supervisor=self.user_admin,
+            costo_estimado=Decimal("500000.00"),
+        )
+        self.presupuesto = Presupuesto.objects.create(
+            numero_presupuesto="PRE-RES-001",
+            obra=self.obra,
+            cliente=self.cliente,
+            creador=self.user_admin,
+            subtotal=Decimal("100000.00"),
+            monto_iva=Decimal("19000.00"),
+            monto_total=Decimal("119000.00"),
+        )
+        # Las migraciones cargan obras de demostración, así que el saldo estimado no parte en 0:
+        # se guarda el valor inicial y se compara contra él.
+        self.saldo_estimado_inicial = self._resumen()["saldo_estimado_por_cobrar"]
+
+    def _crear_factura(self, folio, fecha_vencimiento):
+        return Factura.objects.create(
+            folio_factura=folio,
+            presupuesto=self.presupuesto,
+            cliente=self.cliente,
+            fecha_emision=date(2026, 1, 1),
+            fecha_vencimiento=fecha_vencimiento,
+            monto_total=Decimal("100000.00"),
+            saldo_pendiente=Decimal("100000.00"),
+            estado_pago="Pendiente",
+        )
+
+    def _resumen(self):
+        res = self.client.get(self.ENDPOINT)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        return {clave: Decimal(valor) for clave, valor in res.data.items()}
+
+    def test_sin_facturas_ni_pagos_devuelve_ceros(self):
+        """Sin facturas ni pagos, todo es 0 y la morosidad no falla por división por cero."""
+        datos = self._resumen()
+        self.assertEqual(datos["total_cobrado"], Decimal("0.00"))
+        self.assertEqual(datos["deuda_pendiente"], Decimal("0.00"))
+        self.assertEqual(datos["deuda_vencida"], Decimal("0.00"))
+        self.assertEqual(datos["porcentaje_morosidad"], Decimal("0.00"))
+
+    def test_calculos_con_un_abono_y_una_factura_vencida(self):
+        """Dos facturas de $100.000 (una vencida y una vigente) y un abono de $40.000 a la vencida."""
+        factura_vencida = self._crear_factura("FAC-RES-0001", date(2026, 1, 31))
+        self._crear_factura("FAC-RES-0002", date(2099, 12, 31))
+
+        payload = {
+            "factura": str(factura_vencida.id_factura),
+            "monto_abonado": "40000.00",
+            "metodo_pago": "Transferencia",
+        }
+        res = self.client.post(self.ENDPOINT_PAGOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        datos = self._resumen()
+        self.assertEqual(datos["total_cobrado"], Decimal("40000.00"))
+        self.assertEqual(datos["deuda_pendiente"], Decimal("160000.00"))
+        self.assertEqual(datos["deuda_vencida"], Decimal("60000.00"))
+        self.assertEqual(datos["porcentaje_morosidad"], Decimal("37.50"))
+        self.assertEqual(
+            datos["saldo_estimado_por_cobrar"],
+            self.saldo_estimado_inicial - Decimal("40000.00"),
+        )
+
+    def test_morosidad_es_cero_si_no_hay_facturas_vencidas(self):
+        self._crear_factura("FAC-RES-0003", date(2099, 12, 31))
+        datos = self._resumen()
+        self.assertEqual(datos["deuda_pendiente"], Decimal("100000.00"))
+        self.assertEqual(datos["porcentaje_morosidad"], Decimal("0.00"))
+
+    def test_morosidad_es_cien_si_toda_la_deuda_esta_vencida(self):
+        self._crear_factura("FAC-RES-0004", date(2026, 1, 31))
+        datos = self._resumen()
+        self.assertEqual(datos["porcentaje_morosidad"], Decimal("100.00"))
+
+    def test_factura_pagada_completa_no_cuenta_como_deuda(self):
+        factura_vencida = self._crear_factura("FAC-RES-0005", date(2026, 1, 31))
+        self._crear_factura("FAC-RES-0006", date(2099, 12, 31))
+
+        payload = {
+            "factura": str(factura_vencida.id_factura),
+            "monto_abonado": "100000.00",
+            "metodo_pago": "Transferencia",
+        }
+        res = self.client.post(self.ENDPOINT_PAGOS, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        datos = self._resumen()
+        self.assertEqual(datos["total_cobrado"], Decimal("100000.00"))
+        self.assertEqual(datos["deuda_pendiente"], Decimal("100000.00"))
+        self.assertEqual(datos["deuda_vencida"], Decimal("0.00"))
+        self.assertEqual(datos["porcentaje_morosidad"], Decimal("0.00"))
+
+    def test_usuario_tecnico_no_puede_ver_el_resumen(self):
+        grupo_tecnico, _ = Group.objects.get_or_create(name="TECNICO")
+        tecnico = User.objects.create_user(username="tecnico_resumen", password="Password_123")
+        tecnico.groups.add(grupo_tecnico)
+        self.client.force_authenticate(user=tecnico)
+
+        res = self.client.get(self.ENDPOINT)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+

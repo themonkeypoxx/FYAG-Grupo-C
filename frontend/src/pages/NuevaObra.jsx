@@ -115,7 +115,7 @@ if (!estadoPendiente) {
 
       await obrasService.crearObra(payload);
 
-navigate('/', {
+navigate('/dashboard-obras', {
   state: {
     notificacion: {
       tipo: 'exito',
@@ -307,7 +307,7 @@ navigate('/', {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
-          <Link to="/" className="btn-secondary" style={{ textDecoration: 'none' }}>
+          <Link to="/dashboard-obras" className="btn-secondary" style={{ textDecoration: 'none' }}>
             Cancelar
           </Link>
           <button type="submit" className="btn-primary" disabled={guardando}>

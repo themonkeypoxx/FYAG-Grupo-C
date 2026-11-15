@@ -9,6 +9,8 @@ export default function Navbar() {
   const esGerencial = authService.tieneRol('Gerencial');
   const esSupervisor = authService.tieneRol('Supervisor');
 
+  const puedeAccederFinanzas = esGerencial || esAdministrativo;
+
   const rutaInicio = esTecnico
     ? '/vista-tecnico'
     : esAdministrativo && !esGerencial
@@ -54,7 +56,16 @@ export default function Navbar() {
             </Link>
           )}
 
-          {(esGerencial || esSupervisor || esAdministrativo) && (
+          {puedeAccederFinanzas && (
+            <Link
+              to="/resumen-financiero"
+              className={`nav-link ${location.pathname === '/resumen-financiero' ? 'active' : ''}`}
+            >
+              Resumen Financiero
+            </Link>
+          )}
+
+          {puedeAccederFinanzas && (
             <Link
               to="/nuevo-presupuesto"
               className={`nav-link ${location.pathname === '/nuevo-presupuesto' ? 'active' : ''}`}
