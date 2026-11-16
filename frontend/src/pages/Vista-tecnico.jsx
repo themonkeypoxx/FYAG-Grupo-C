@@ -17,12 +17,13 @@ export default function VistaTecnico() {
     return hoy;
   });
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState('');
   const [solicitudObra, setSolicitudObra] = useState(null);
   const [tipoSolicitud, setTipoSolicitud] = useState('SUSPENSION');
   const [motivoSolicitud, setMotivoSolicitud] = useState('');
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
-
+  const [error, setError] = useState('');   // solo error de carga, 
+  const [aviso, setAviso] = useState(null);    // aviso de solicitud enviada
+ //se separan para evitar q se borre le horario cndo hay un aviso - Ismael
   useEffect(() => {
     obrasService.getAsignaciones()
       .then(setAsignaciones)
@@ -32,13 +33,14 @@ export default function VistaTecnico() {
 
   const abrirSolicitud = (obra) => {
     setSolicitudObra(obra);
-    setTipoSolicitud('SUSPENSION');
+    setTipoSolicitud(obra.estado_obra_codigo === 'SUSPENDIDA' ? 'REANUDACION' : 'SUSPENSION');
     setMotivoSolicitud('');
   };
 
   const enviarSolicitud = async (event) => {
     event.preventDefault();
     setEnviandoSolicitud(true);
+    setAviso(null);
     try {
       await obrasService.solicitarCambioObra({
         obra: solicitudObra.obra,
@@ -46,9 +48,15 @@ export default function VistaTecnico() {
         motivo: motivoSolicitud.trim(),
       });
       setSolicitudObra(null);
-      setError('Solicitud enviada al supervisor.');
+      setAviso({ tipo: 'ok', texto: 'Solicitud enviada al supervisor.' });
     } catch (err) {
-      setError(err.response?.data?.detail || err.response?.data?.non_field_errors?.[0] || 'No se pudo enviar la solicitud.');
+      setAviso({
+        tipo: 'error',
+        texto:
+          err.response?.data?.detail ||
+          err.response?.data?.non_field_errors?.[0] ||
+          'No se pudo enviar la solicitud.',
+      });
     } finally {
       setEnviandoSolicitud(false);
     }
@@ -72,6 +80,12 @@ export default function VistaTecnico() {
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
       <div><h1 style={{ marginBottom: '.25rem' }}>Mi horario</h1><p style={{ color: 'var(--text-muted)', margin: 0 }}>Obras y turnos que te asignaron</p></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}><button className="btn-secondary" onClick={() => cambiarSemana(-1)}>← Semana anterior</button><strong>{semana.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })}</strong><button className="btn-secondary" onClick={() => cambiarSemana(1)}>Semana siguiente →</button></div>
+      {aviso && (
+      <p role={aviso.tipo === 'error' ? 'alert' : 'status'}
+      style={{ color: aviso.tipo === 'error' ? 'var(--danger, #b91c1c)' : 'var(--success, #15803d)', marginBottom: '1rem' }}>
+      {aviso.texto}
+      </p>
+)}
     </div>
     {cargando ? <p>Cargando horario…</p> : error ? <p role="alert">{error}</p> : <section aria-label="Horario semanal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.85rem' }}>
       {dias.map(({ fecha, clave, obras }) => <article key={clave} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', minHeight: '190px' }}>
@@ -88,16 +102,30 @@ export default function VistaTecnico() {
           <strong>{obra.hora_inicio.slice(0, 5)}–{obra.hora_termino.slice(0, 5)}</strong>
           <div className="horario-card-title">{obra.obra_codigo} · {obra.obra_nombre}</div>
           <small>{obra.ubicacion_faena}</small>
-          <button type="button" className="btn-secondary" onClick={() => abrirSolicitud(obra)} style={{ marginTop: '.6rem', fontSize: '.8rem' }}>
-            Solicitar cambio de estado
-          </button>
+          {!['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo) && (
+            <button type="button" className="btn-secondary" onClick={() => abrirSolicitud(obra)} style={{ marginTop: '.6rem', fontSize: '.8rem' }}>
+              Solicitar cambio de estado
+            </button>
+          )}
         </div>)}</div> : <p style={{ color: 'var(--text-muted)', fontSize: '.9rem' }}>Sin obras asignadas</p>}
       </article>)}
     </section>}
     {solicitudObra && <div role="presentation" onClick={() => setSolicitudObra(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, .55)', zIndex: 100, display: 'grid', placeItems: 'center', padding: '1rem' }}>
       <form onSubmit={enviarSolicitud} onClick={(event) => event.stopPropagation()} style={{ width: 'min(460px, 100%)', background: 'var(--surface)', padding: '1.5rem', borderRadius: '12px', display: 'grid', gap: '1rem' }}>
         <h2 style={{ margin: 0 }}>Solicitar cambio · {solicitudObra.obra_codigo}</h2>
-        <label>Tipo<select required value={tipoSolicitud} onChange={(event) => setTipoSolicitud(event.target.value)} style={{ display: 'block', width: '100%', padding: '.6rem' }}><option value="SUSPENSION">Suspensión</option><option value="CANCELACION">Cancelación</option></select></label>
+        <label>Tipo<select required value={tipoSolicitud} onChange={(event) => setTipoSolicitud(event.target.value)} style={{ display: 'block', width: '100%', padding: '.6rem' }}>
+          {solicitudObra.estado_obra_codigo === 'SUSPENDIDA' ? (
+            <>
+              <option value="REANUDACION">Reanudar: pasar a En ejecución</option>
+              <option value="CANCELACION">Cancelar</option>
+            </>
+          ) : (
+            <>
+              {solicitudObra.estado_obra_codigo === 'EJECUCION' && <option value="SUSPENSION">Suspender</option>}
+              <option value="CANCELACION">Cancelar</option>
+            </>
+          )}
+        </select></label>
         <label>Motivo<textarea required minLength="5" rows="4" value={motivoSolicitud} onChange={(event) => setMotivoSolicitud(event.target.value)} placeholder="Explica por qué solicitas el cambio" style={{ display: 'block', width: '100%', padding: '.6rem' }} /></label>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}><button type="button" className="btn-secondary" onClick={() => setSolicitudObra(null)}>Cancelar</button><button type="submit" className="btn-primary" disabled={enviandoSolicitud}>{enviandoSolicitud ? 'Enviando…' : 'Enviar solicitud'}</button></div>
       </form>

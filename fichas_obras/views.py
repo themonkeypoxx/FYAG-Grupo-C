@@ -367,7 +367,11 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
         if es_gerencia:
             return queryset
         if es_supervisor:
-            return queryset.filter(obra__supervisor=self.request.user)
+            return queryset
+            # return queryset.filter(obra__supervisor=self.request.user)
+            # -Ismael
+            # Se deja como comentario ese queryset pq devuelve solo lo de las obras asignadas al supervisor
+            # Por esta cosa era que tardaban en mostrarse las solicitudes de cambio d estado
         return queryset.filter(tecnico=self.request.user)
 
     def create(self, request, *args, **kwargs):
@@ -402,7 +406,11 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             if accion == "APROBAR":
-                codigo_estado = "SUSPENDIDA" if solicitud.tipo == SolicitudCambioObra.TipoSolicitud.SUSPENSION else "CANCELADA"
+                codigo_estado = {
+                    SolicitudCambioObra.TipoSolicitud.SUSPENSION: "SUSPENDIDA",
+                    SolicitudCambioObra.TipoSolicitud.CANCELACION: "CANCELADA",
+                    SolicitudCambioObra.TipoSolicitud.REANUDACION: "EJECUCION",
+                }[solicitud.tipo]
                 obra = Obra.objects.select_for_update().select_related("estado_obra").get(pk=solicitud.obra_id)
                 aplicar_transicion_estado(obra, codigo_estado, motivo=solicitud.motivo)
                 solicitud.estado = SolicitudCambioObra.EstadoSolicitud.APROBADA
