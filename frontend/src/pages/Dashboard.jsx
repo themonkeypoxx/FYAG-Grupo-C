@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [obraEditando, setObraEditando] = useState(null);
   const [editForm, setEditForm] = useState({ nombre_obra: '', ubicacion_faena: '', fecha_inicio: '', fecha_termino_estimada: '', costo_estimado: '' });
   const [solicitudes, setSolicitudes] = useState([]);
+  const [errorSolicitudes, setErrorSolicitudes] = useState('');
+  const [cargandoSolicitudes, setCargandoSolicitudes] = useState(false);
 
   useEffect(() => {
     const notificacionRecibida = location.state?.notificacion;
@@ -82,10 +84,16 @@ export default function Dashboard() {
   }, [tipoSeleccionado, estadoSeleccionado, busqueda]);
 
   const cargarSolicitudes = useCallback(async () => {
+    setCargandoSolicitudes(true);
+    setErrorSolicitudes('');
     try {
-      setSolicitudes(await obrasService.getSolicitudesCambio());
+      const respuesta = await obrasService.getSolicitudesCambio();
+      setSolicitudes(Array.isArray(respuesta) ? respuesta : respuesta?.results || []);
     } catch (err) {
       console.error('Error al cargar solicitudes de cambio:', err);
+      setErrorSolicitudes('No se pudieron cargar las solicitudes. Revisa tu conexión y vuelve a intentar.');
+    } finally {
+      setCargandoSolicitudes(false);
     }
   }, []);
 
@@ -99,6 +107,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     cargarSolicitudes();
+  }, [cargarSolicitudes]);
+
+  useEffect(() => {
+    const refrescarAlVolver = () => {
+      if (document.visibilityState === 'visible') cargarSolicitudes();
+    };
+    const intervalo = window.setInterval(refrescarAlVolver, 30000);
+    window.addEventListener('focus', refrescarAlVolver);
+    document.addEventListener('visibilitychange', refrescarAlVolver);
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener('focus', refrescarAlVolver);
+      document.removeEventListener('visibilitychange', refrescarAlVolver);
+    };
   }, [cargarSolicitudes]);
 
   const handleSolicitarTransicion = (obra, transicion) => {
@@ -227,19 +249,26 @@ export default function Dashboard() {
         </div>
       )}
 
-      {solicitudes.filter((solicitud) => solicitud.estado === 'PENDIENTE').length > 0 && (
-        <section className="solicitudes-panel" aria-label="Solicitudes de técnicos">
+      <section className="solicitudes-panel" aria-label="Solicitudes de técnicos">
           <div className="solicitudes-panel-header">
             <div>
               <h2>Solicitudes de técnicos</h2>
-              <p>Revisa y resuelve las solicitudes de suspensión o cancelación.</p>
+              <p>Revisa y resuelve las solicitudes de suspensión, cancelación o reanudación.</p>
             </div>
+            <button type="button" className="btn-secondary" onClick={cargarSolicitudes} disabled={cargandoSolicitudes}>
+              {cargandoSolicitudes ? 'Actualizando…' : 'Actualizar solicitudes'}
+            </button>
           </div>
-          <div className="solicitudes-lista">
+          {errorSolicitudes ? (
+            <p role="alert">{errorSolicitudes}</p>
+          ) : solicitudes.filter((solicitud) => solicitud.estado === 'PENDIENTE').length === 0 ? (
+            <p>{cargandoSolicitudes ? 'Cargando solicitudes…' : 'No hay solicitudes pendientes para las obras que supervisas.'}</p>
+          ) : (
+            <div className="solicitudes-lista">
             {solicitudes.filter((solicitud) => solicitud.estado === 'PENDIENTE').map((solicitud) => (
               <article className="solicitud-item" key={solicitud.id_solicitud}>
                 <div>
-                  <strong>{solicitud.tipo === 'SUSPENSION' ? 'Suspensión' : 'Cancelación'} · {solicitud.obra_codigo}</strong>
+                  <strong>{({ SUSPENSION: 'Suspensión', CANCELACION: 'Cancelación', REANUDACION: 'Reanudación' })[solicitud.tipo]} · {solicitud.obra_codigo}</strong>
                   <span>{solicitud.obra_nombre} · Técnico: {solicitud.tecnico_nombre}</span>
                   <p>{solicitud.motivo}</p>
                 </div>
@@ -249,9 +278,9 @@ export default function Dashboard() {
                 </div>
               </article>
             ))}
-          </div>
+            </div>
+          )}
         </section>
-      )}
 
       <ClasificacionServicios
         tipoSeleccionado={tipoSeleccionado}

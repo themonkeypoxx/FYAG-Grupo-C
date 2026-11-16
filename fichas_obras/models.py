@@ -173,6 +173,7 @@ class SolicitudCambioObra(models.Model):
     class TipoSolicitud(models.TextChoices):
         SUSPENSION = "SUSPENSION", "Suspensión"
         CANCELACION = "CANCELACION", "Cancelación"
+        REANUDACION = "REANUDACION", "Reanudación"
 
     class EstadoSolicitud(models.TextChoices):
         PENDIENTE = "PENDIENTE", "Pendiente"

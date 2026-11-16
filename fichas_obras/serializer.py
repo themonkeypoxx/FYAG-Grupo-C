@@ -204,6 +204,16 @@ class SolicitudCambioObraSerializer(serializers.ModelSerializer):
                 {"obra": "No se puede solicitar un cambio para una obra cerrada."}
             )
 
+        if obra:
+            destinos = {
+                SolicitudCambioObra.TipoSolicitud.SUSPENSION: "SUSPENDIDA",
+                SolicitudCambioObra.TipoSolicitud.CANCELACION: "CANCELADA",
+                SolicitudCambioObra.TipoSolicitud.REANUDACION: "EJECUCION",
+            }
+            destino = destinos.get(attrs.get("tipo", getattr(self.instance, "tipo", None)))
+            if destino:
+                validar_transicion_estado(obra, destino, attrs.get("motivo", getattr(self.instance, "motivo", "")))
+
         if self.instance is None and obra and SolicitudCambioObra.objects.filter(
             obra=obra,
             tecnico=request.user if request else None,
