@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import authService from '../Servicios/authService';
 
-export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico, onEditarObra }) {
+export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico, onDesasignarTecnico, onEditarObra }) {
   const transiciones = obra.transiciones_posibles || [];
   const tecnicosAsignados = obra.tecnicos_asignados || [];
   const esTerminal = ['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo);
@@ -16,16 +16,18 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
   const resumenPorTecnico = useMemo(() => {
     const grupos = {};
     tecnicosAsignados.forEach((a) => {
-      const clave = a.tecnico_nombre;
-      if (!grupos[clave]) grupos[clave] = [];
-      grupos[clave].push(a);
+      const clave = a.tecnico;
+      if (!grupos[clave]) grupos[clave] = { nombre: a.tecnico_nombre, asignaciones: [] };
+      grupos[clave].asignaciones.push(a);
     });
 
-    return Object.entries(grupos).map(([nombre, asignaciones]) => {
+    return Object.entries(grupos).map(([tecnicoId, grupo]) => {
+      const { nombre, asignaciones } = grupo;
       const ordenadas = [...asignaciones].sort((a, b) =>
         `${a.fecha} ${a.hora_inicio}`.localeCompare(`${b.fecha} ${b.hora_inicio}`)
       );
       return {
+        tecnicoId,
         nombre,
         primera: ordenadas[0],
         ultima: ordenadas[ordenadas.length - 1],
@@ -97,11 +99,18 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
                   <span>
                     {t.nombre} <small>({t.total} {t.total === 1 ? 'día' : 'días'})</small>
                   </span>
-                  <small>
-                    {t.total === 1
-                      ? formatear(t.primera)
-                      : `${t.primera.fecha} → ${t.ultima.fecha}`}
-                  </small>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', flexWrap: 'wrap' }}>
+                    <small>
+                      {t.total === 1
+                        ? formatear(t.primera)
+                        : `${t.primera.fecha} → ${t.ultima.fecha}`}
+                    </small>
+                    {onDesasignarTecnico && (
+                      <button type="button" className="btn-secondary" onClick={() => onDesasignarTecnico(obra, t.tecnicoId, t.nombre)}>
+                        Desasignar
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

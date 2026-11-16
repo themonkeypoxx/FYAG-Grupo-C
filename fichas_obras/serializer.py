@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import time
 import uuid
 from rest_framework import serializers
 from .models import *
@@ -150,6 +151,14 @@ class AsignacionTecnicoSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"tecnico": "El usuario seleccionado no tiene el rol de técnico."})
         if inicio and termino and termino <= inicio:
             raise serializers.ValidationError({"hora_termino": "Debe ser posterior a la hora de inicio."})
+        bloques_permitidos = {
+            (time(9, 30), time(13, 30)),
+            (time(15, 0), time(17, 0)),
+        }
+        if activo and inicio and termino and (inicio, termino) not in bloques_permitidos:
+            raise serializers.ValidationError({
+                "bloque": "Selecciona uno de los bloques permitidos: 09:30–13:30 o 15:00–17:00."
+            })
         if tecnico and fecha and inicio and termino and activo:
             conflictos = AsignacionTecnico.objects.filter(
                 tecnico=tecnico, fecha=fecha, activo=True,
