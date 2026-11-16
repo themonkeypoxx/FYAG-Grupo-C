@@ -166,7 +166,8 @@ class AsignacionTecnico(models.Model):
         ]
  
     def __str__(self):
-        return f"{self.tecnico} -> {self.obra.codigo_obra}"
+        obra_codigo = getattr(self.obra, "codigo_obra", "Sin obra")
+        return f"{self.tecnico} -> {obra_codigo}"
 
 
 class SolicitudCambioObra(models.Model):

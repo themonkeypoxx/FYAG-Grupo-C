@@ -340,6 +340,30 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Solo un supervisor puede eliminar asignaciones."}, status=status.HTTP_403_FORBIDDEN)
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=False, methods=["post"], url_path="desasignar")
+    def desasignar(self, request):
+        if not self._puede_gestionar_asignaciones():
+            return Response(
+                {"detail": "Solo un supervisor puede desasignar técnicos."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        obra_id = request.data.get("obra")
+        tecnico_id = request.data.get("tecnico")
+        if not obra_id or not tecnico_id:
+            return Response(
+                {"detail": "Debes indicar la obra y el técnico."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        cantidad = AsignacionTecnico.objects.filter(
+            obra_id=obra_id, tecnico_id=tecnico_id, activo=True
+        ).update(activo=False)
+        if not cantidad:
+            return Response(
+                {"detail": "El técnico no tiene asignaciones activas en esta obra."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"mensaje": "Técnico desasignado de la obra.", "asignaciones_desactivadas": cantidad})
+
     @action(detail=False, methods=["get"], url_path="tecnicos")
     def tecnicos(self, request):
         from django.contrib.auth import get_user_model
@@ -372,6 +396,7 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
             # -Ismael
             # Se deja como comentario ese queryset pq devuelve solo lo de las obras asignadas al supervisor
             # Por esta cosa era que tardaban en mostrarse las solicitudes de cambio d estado
+            # -- En realidad, no se mostraban cfffff
         return queryset.filter(tecnico=self.request.user)
 
     def create(self, request, *args, **kwargs):

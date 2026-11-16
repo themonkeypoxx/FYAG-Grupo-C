@@ -77,6 +77,14 @@ export const obrasService = {
     return response.data;
   },
 
+  async desasignarTecnico(obraId, tecnicoId) {
+    const response = await api.post('/obras/fyag/v1/asignaciones-tecnico/desasignar/', {
+      obra: obraId,
+      tecnico: tecnicoId,
+    });
+    return response.data;
+  },
+
   async getAsignaciones() {
     const response = await api.get('/obras/fyag/v1/asignaciones-tecnico/');
     return response.data;
