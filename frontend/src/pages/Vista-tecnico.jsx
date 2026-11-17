@@ -75,6 +75,21 @@ export default function VistaTecnico() {
     return nueva;
   });
   const formatoDia = new Intl.DateTimeFormat('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+  const tiposObra = [
+    { codigo: 'CLIMATIZACION', nombre: 'Climatización', color: 'var(--tipo-clima)' },
+    { codigo: 'MANTENCION', nombre: 'Mantención', color: 'var(--tipo-mant)' },
+    { codigo: 'PROY_ELECTRICO', nombre: 'Proyecto eléctrico', color: 'var(--tipo-elec)' },
+    { codigo: 'EMERGENCIA', nombre: 'Emergencia', color: 'var(--tipo-emerg)' },
+    { codigo: 'GARANTIA', nombre: 'Garantía', color: 'var(--tipo-garan)' },
+    { codigo: 'PROYECTO', nombre: 'Proyecto', color: 'var(--tipo-proy)' },
+  ];
+  const estadosObra = [
+    { codigo: 'PENDIENTE', nombre: 'Pendiente', borde: 'var(--estado-pendiente)', fondo: 'var(--estado-pendiente-bg)' },
+    { codigo: 'EJECUCION', nombre: 'En ejecución', borde: 'var(--estado-ejecucion)', fondo: 'var(--estado-ejecucion-bg)' },
+    { codigo: 'SUSPENDIDA', nombre: 'Suspendida', borde: 'var(--estado-suspendida)', fondo: 'var(--estado-suspendida-bg)' },
+    { codigo: 'FINALIZADA', nombre: 'Finalizada', borde: 'var(--estado-finalizada)', fondo: 'var(--estado-finalizada-bg)' },
+    { codigo: 'CANCELADA', nombre: 'Cancelada', borde: 'var(--estado-cancelada)', fondo: 'var(--estado-cancelada-bg)' },
+  ];
 
   return <main className="main-content">
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
@@ -87,6 +102,30 @@ export default function VistaTecnico() {
       </p>
 )}
     </div>
+    <section aria-label="Leyenda de colores del horario" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '.85rem 1rem' }}>
+        <h2 style={{ fontSize: '.95rem', margin: '0 0 .65rem' }}>Bolita: tipo de obra</h2>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.55rem .9rem' }}>
+          {tiposObra.map((tipo) => (
+            <span key={tipo.codigo} style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', fontSize: '.82rem' }}>
+              <span aria-hidden="true" style={{ width: '.65rem', height: '.65rem', borderRadius: '50%', background: tipo.color, flex: '0 0 auto' }} />
+              {tipo.nombre}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '.85rem 1rem' }}>
+        <h2 style={{ fontSize: '.95rem', margin: '0 0 .65rem' }}>Color del bloque: estado operativo</h2>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.55rem .9rem' }}>
+          {estadosObra.map((estado) => (
+            <span key={estado.codigo} style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem', fontSize: '.82rem' }}>
+              <span aria-hidden="true" style={{ width: '.85rem', height: '.85rem', borderLeft: `4px solid ${estado.borde}`, borderRadius: '2px', background: estado.fondo, flex: '0 0 auto' }} />
+              {estado.nombre}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
     {cargando ? <p>Cargando horario…</p> : error ? <p role="alert">{error}</p> : <section aria-label="Horario semanal" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.85rem' }}>
       {dias.map(({ fecha, clave, obras }) => <article key={clave} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', minHeight: '190px' }}>
         <h2 style={{ fontSize: '1rem', textTransform: 'capitalize', margin: '0 0 .9rem' }}>{formatoDia.format(fecha)}</h2>
