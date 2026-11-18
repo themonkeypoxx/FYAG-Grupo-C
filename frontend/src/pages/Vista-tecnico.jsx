@@ -27,13 +27,30 @@ export default function VistaTecnico() {
   const [notificaciones, setNotificaciones] = useState([]);
  //se separan para evitar q se borre le horario cndo hay un aviso - Ismael
   useEffect(() => {
-    Promise.all([obrasService.getAsignaciones(), obrasService.getNotificacionesTecnico()])
-      .then(([lista, avisos]) => {
+    const cargarVista = async () => {
+      try {
+        const [lista, avisos] = await Promise.all([
+          obrasService.getAsignaciones(),
+          obrasService.getNotificacionesTecnico(),
+        ]);
         setAsignaciones(lista);
         setNotificaciones(Array.isArray(avisos) ? avisos : avisos?.results || []);
-      })
-      .catch(() => setError('No se pudieron cargar tus obras asignadas.'))
-      .finally(() => setCargando(false));
+      } catch {
+        setError('No se pudieron cargar tus obras asignadas o notificaciones.');
+      } finally {
+        setCargando(false);
+      }
+    };
+    cargarVista();
+    const intervalo = window.setInterval(async () => {
+      try {
+        const avisos = await obrasService.getNotificacionesTecnico();
+        setNotificaciones(Array.isArray(avisos) ? avisos : avisos?.results || []);
+      } catch {
+        // Se conserva lo ya cargado si hay una falla temporal de conexión.
+      }
+    }, 30000);
+    return () => window.clearInterval(intervalo);
   }, []);
 
   const iniciarObra = async (obra) => {
