@@ -14,7 +14,7 @@ from .serializer import CustomTokenObtainPairSerializer
 
 from .models import (
     AsignacionTecnico, Cliente, EstadoObra, Factura, ItemPresupuesto, Obra,
-    Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio,
+    Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio, NotificacionTecnico,
 )
 from .permissions import EsGerencial, EsSupervisor, EsAdministrativo, EsTecnico 
 #x alguna razon faltaba el import de los demas grupos y solo estaban EsSupervisor y Gerencial *raro
@@ -29,11 +29,12 @@ from .serializer import (
     PresupuestoSerializer,
     RegistroPagoSerializer,
     SolicitudCambioObraSerializer,
+    NotificacionTecnicoSerializer,
 )
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
 class Crud_obras(viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo]
+    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo | EsTecnico]
     """
     CRUD principal de Obras con clasificación por tipo de servicio,
     búsqueda, filtros y máquina de estados operativos.
@@ -118,6 +119,12 @@ class Crud_obras(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        es_tecnico = request.user.groups.filter(name__in=["Tecnico", "TECNICO", "Técnico"]).exists()
+        if es_tecnico and (obra.estado_obra.codigo_estado != "PENDIENTE"
+                or str(nuevo_estado_val).strip().upper() != "EJECUCION"
+                or not AsignacionTecnico.objects.filter(obra=obra, tecnico=request.user).exists()):
+            return Response({"error": "Solo puedes iniciar una obra pendiente que tengas asignada."}, status=status.HTTP_403_FORBIDDEN)
+
         # Resolver si pasaron código o ID numérico
         if str(nuevo_estado_val).isdigit():
             try:
@@ -137,6 +144,12 @@ class Crud_obras(viewsets.ModelViewSet):
                 nuevo_codigo=codigo_destino,
                 motivo=motivo
             )
+            if codigo_destino in {"CANCELADA", "SUSPENDIDA", "FINALIZADA"}:
+                tecnico_ids = AsignacionTecnico.objects.filter(obra=obra, activo=True).values_list("tecnico_id", flat=True).distinct()
+                NotificacionTecnico.objects.bulk_create([
+                    NotificacionTecnico(tecnico_id=tecnico_id, obra=obra, estado_codigo=codigo_destino)
+                    for tecnico_id in tecnico_ids
+                ])
             serializer = self.get_serializer(obra_actualizada)
             return Response(
                 {
@@ -255,6 +268,7 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
             name__in=["Supervisor", "SUPERVISOR", "Gerencial", "GERENCIA", "Gerente", "Gerencia"]
         ).exists()
 
+
     def create(self, request, *args, **kwargs):
         if not self._puede_gestionar_asignaciones():
             return Response(
@@ -370,6 +384,14 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
         User = get_user_model()
         tecnicos = User.objects.filter(groups__name__in=["Tecnico", "TECNICO", "Técnico"], is_active=True).distinct().order_by("first_name", "last_name", "username")
         return Response([{"id": user.pk, "username": user.username, "nombre": user.get_full_name() or user.username} for user in tecnicos])
+
+
+class NotificacionTecnicoViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [EsTecnico]
+    serializer_class = NotificacionTecnicoSerializer
+
+    def get_queryset(self):
+        return NotificacionTecnico.objects.filter(tecnico=self.request.user).select_related("obra", "obra__estado_obra")
 
 
 class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
