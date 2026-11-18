@@ -169,6 +169,18 @@ class AsignacionTecnico(models.Model):
         return f"{self.tecnico} -> {self.obra.codigo_obra}"
 
 
+class NotificacionTecnico(models.Model):
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notificaciones_obra")
+    obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name="notificaciones_tecnicos")
+    estado_codigo = models.CharField(max_length=20)
+    creada_en = models.DateTimeField(default=timezone.now)
+    leida = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "notificacion_tecnico"
+        ordering = ["-creada_en"]
+
+
 class SolicitudCambioObra(models.Model):
     class TipoSolicitud(models.TextChoices):
         SUSPENSION = "SUSPENSION", "Suspensión"

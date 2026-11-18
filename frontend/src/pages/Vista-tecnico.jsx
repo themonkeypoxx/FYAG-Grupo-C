@@ -23,13 +23,46 @@ export default function VistaTecnico() {
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
   const [error, setError] = useState('');   // solo error de carga, 
   const [aviso, setAviso] = useState(null);    // aviso de solicitud enviada
+  const [pestana, setPestana] = useState('HORARIO');
+  const [notificaciones, setNotificaciones] = useState([]);
  //se separan para evitar q se borre le horario cndo hay un aviso - Ismael
   useEffect(() => {
-    obrasService.getAsignaciones()
-      .then(setAsignaciones)
-      .catch(() => setError('No se pudieron cargar tus obras asignadas.'))
-      .finally(() => setCargando(false));
+    const cargarVista = async () => {
+      try {
+        const [lista, avisos] = await Promise.all([
+          obrasService.getAsignaciones(),
+          obrasService.getNotificacionesTecnico(),
+        ]);
+        setAsignaciones(lista);
+        setNotificaciones(Array.isArray(avisos) ? avisos : avisos?.results || []);
+      } catch {
+        setError('No se pudieron cargar tus obras asignadas o notificaciones.');
+      } finally {
+        setCargando(false);
+      }
+    };
+    cargarVista();
+    const intervalo = window.setInterval(async () => {
+      try {
+        const avisos = await obrasService.getNotificacionesTecnico();
+        setNotificaciones(Array.isArray(avisos) ? avisos : avisos?.results || []);
+      } catch {
+        // Se conserva lo ya cargado si hay una falla temporal de conexión.
+      }
+    }, 30000);
+    return () => window.clearInterval(intervalo);
   }, []);
+
+  const iniciarObra = async (obra) => {
+    try {
+      await obrasService.cambiarEstado(obra.obra, 'EJECUCION');
+      setAviso({ tipo: 'ok', texto: `${obra.obra_codigo} pasó a En ejecución.` });
+      const lista = await obrasService.getAsignaciones();
+      setAsignaciones(lista);
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: err.response?.data?.error || 'No se pudo iniciar la obra.' });
+    }
+  };
 
   const abrirSolicitud = (obra) => {
     setSolicitudObra(obra);
@@ -91,7 +124,19 @@ export default function VistaTecnico() {
     { codigo: 'CANCELADA', nombre: 'Cancelada', borde: 'var(--estado-cancelada)', fondo: 'var(--estado-cancelada-bg)' },
   ];
 
-  return <main className="main-content">
+  return <main className="main-content" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+    <nav aria-label="Secciones del técnico" style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem' }}>
+      <button className={pestana === 'HORARIO' ? 'btn-primary' : 'btn-secondary'} onClick={() => setPestana('HORARIO')}>Mi horario</button>
+      <button className={pestana === 'NOTIFICACIONES' ? 'btn-primary' : 'btn-secondary'} onClick={() => setPestana('NOTIFICACIONES')}>Notificaciones{notificaciones.some((n) => !n.leida) ? ` (${notificaciones.filter((n) => !n.leida).length})` : ''}</button>
+    </nav>
+    {pestana === 'NOTIFICACIONES' ? <section aria-label="Notificaciones de obras">
+      <h1>Notificaciones</h1>
+      {notificaciones.length ? notificaciones.map((n) => <article key={n.id} style={{ padding: '1rem', marginBottom: '.75rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
+        <strong>{n.obra_codigo} · {n.obra_nombre}</strong>
+        <p>La obra fue {({ CANCELADA: 'cancelada', SUSPENDIDA: 'suspendida', FINALIZADA: 'finalizada' })[n.estado_codigo] || n.estado_descripcion}.</p>
+        <small>{new Date(n.creada_en).toLocaleString('es-CL')}</small>
+      </article>) : <p>No tienes notificaciones.</p>}
+    </section> : <>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
       <div><h1 style={{ marginBottom: '.25rem' }}>Mi horario</h1><p style={{ color: 'var(--text-muted)', margin: 0 }}>Obras y turnos que te asignaron</p></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}><button className="btn-secondary" onClick={() => cambiarSemana(-1)}>← Semana anterior</button><strong>{semana.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })}</strong><button className="btn-secondary" onClick={() => cambiarSemana(1)}>Semana siguiente →</button></div>
@@ -146,6 +191,7 @@ export default function VistaTecnico() {
               Solicitar cambio de estado
             </button>
           )}
+          {obra.estado_obra_codigo === 'PENDIENTE' && <button type="button" className="btn-primary" onClick={() => iniciarObra(obra)} style={{ marginTop: '.6rem', fontSize: '.8rem' }}>Iniciar obra</button>}
         </div>)}</div> : <p style={{ color: 'var(--text-muted)', fontSize: '.9rem' }}>Sin obras asignadas</p>}
       </article>)}
     </section>}
@@ -169,5 +215,6 @@ export default function VistaTecnico() {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}><button type="button" className="btn-secondary" onClick={() => setSolicitudObra(null)}>Cancelar</button><button type="submit" className="btn-primary" disabled={enviandoSolicitud}>{enviandoSolicitud ? 'Enviando…' : 'Enviar solicitud'}</button></div>
       </form>
     </div>}
+    </>}
   </main>;
 }

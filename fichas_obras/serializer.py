@@ -141,6 +141,7 @@ class AsignacionTecnicoSerializer(serializers.ModelSerializer):
     def get_tecnico_nombre(self, obj):
         return obj.tecnico.get_full_name() or obj.tecnico.username
 
+
     def validate(self, attrs):
         tecnico = attrs.get("tecnico", getattr(self.instance, "tecnico", None))
         fecha = attrs.get("fecha", getattr(self.instance, "fecha", None))
@@ -169,6 +170,16 @@ class AsignacionTecnicoSerializer(serializers.ModelSerializer):
             if conflictos.exists():
                 raise serializers.ValidationError({"horario": "El técnico ya tiene una obra asignada en ese horario."})
         return attrs
+
+
+class NotificacionTecnicoSerializer(serializers.ModelSerializer):
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
+    estado_descripcion = serializers.CharField(source="obra.estado_obra.descripcion", read_only=True)
+
+    class Meta:
+        model = NotificacionTecnico
+        fields = ["id", "obra", "obra_codigo", "obra_nombre", "estado_codigo", "estado_descripcion", "creada_en", "leida"]
 
 
 class SolicitudCambioObraSerializer(serializers.ModelSerializer):

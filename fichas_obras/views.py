@@ -14,7 +14,7 @@ from .serializer import CustomTokenObtainPairSerializer
 
 from .models import (
     AsignacionTecnico, Cliente, EstadoObra, Factura, ItemPresupuesto, Obra,
-    Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio,
+    Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio, NotificacionTecnico,
 )
 from .permissions import EsGerencial, EsSupervisor, EsAdministrativo, EsTecnico 
 #x alguna razon faltaba el import de los demas grupos y solo estaban EsSupervisor y Gerencial *raro
@@ -29,11 +29,25 @@ from .serializer import (
     PresupuestoSerializer,
     RegistroPagoSerializer,
     SolicitudCambioObraSerializer,
+    NotificacionTecnicoSerializer,
 )
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
+
+def notificar_tecnicos_de_obra(obra, estado_codigo):
+    """Guarda un aviso para cada técnico con asignaciones activas en la obra."""
+    if estado_codigo not in {"CANCELADA", "SUSPENDIDA", "FINALIZADA"}:
+        return
+    tecnico_ids = AsignacionTecnico.objects.filter(
+        obra=obra, activo=True
+    ).values_list("tecnico_id", flat=True).distinct()
+    NotificacionTecnico.objects.bulk_create([
+        NotificacionTecnico(tecnico_id=tecnico_id, obra=obra, estado_codigo=estado_codigo)
+        for tecnico_id in tecnico_ids
+    ])
+
 class Crud_obras(viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo]
+    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo | EsTecnico]
     """
     CRUD principal de Obras con clasificación por tipo de servicio,
     búsqueda, filtros y máquina de estados operativos.
@@ -118,6 +132,12 @@ class Crud_obras(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        es_tecnico = request.user.groups.filter(name__in=["Tecnico", "TECNICO", "Técnico"]).exists()
+        if es_tecnico and (obra.estado_obra.codigo_estado != "PENDIENTE"
+                or str(nuevo_estado_val).strip().upper() != "EJECUCION"
+                or not AsignacionTecnico.objects.filter(obra=obra, tecnico=request.user).exists()):
+            return Response({"error": "Solo puedes iniciar una obra pendiente que tengas asignada."}, status=status.HTTP_403_FORBIDDEN)
+
         # Resolver si pasaron código o ID numérico
         if str(nuevo_estado_val).isdigit():
             try:
@@ -137,6 +157,7 @@ class Crud_obras(viewsets.ModelViewSet):
                 nuevo_codigo=codigo_destino,
                 motivo=motivo
             )
+            notificar_tecnicos_de_obra(obra, codigo_destino)
             serializer = self.get_serializer(obra_actualizada)
             return Response(
                 {
@@ -255,6 +276,7 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
             name__in=["Supervisor", "SUPERVISOR", "Gerencial", "GERENCIA", "Gerente", "Gerencia"]
         ).exists()
 
+
     def create(self, request, *args, **kwargs):
         if not self._puede_gestionar_asignaciones():
             return Response(
@@ -372,6 +394,14 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
         return Response([{"id": user.pk, "username": user.username, "nombre": user.get_full_name() or user.username} for user in tecnicos])
 
 
+class NotificacionTecnicoViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [EsTecnico]
+    serializer_class = NotificacionTecnicoSerializer
+
+    def get_queryset(self):
+        return NotificacionTecnico.objects.filter(tecnico=self.request.user).select_related("obra", "obra__estado_obra")
+
+
 class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsSupervisor | EsTecnico]
     serializer_class = SolicitudCambioObraSerializer
@@ -438,6 +468,7 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
                 }[solicitud.tipo]
                 obra = Obra.objects.select_for_update().select_related("estado_obra").get(pk=solicitud.obra_id)
                 aplicar_transicion_estado(obra, codigo_estado, motivo=solicitud.motivo)
+                notificar_tecnicos_de_obra(obra, codigo_estado)
                 solicitud.estado = SolicitudCambioObra.EstadoSolicitud.APROBADA
             else:
                 solicitud.estado = SolicitudCambioObra.EstadoSolicitud.RECHAZADA

@@ -90,6 +90,11 @@ export const obrasService = {
     return response.data;
   },
 
+  async getNotificacionesTecnico() {
+    const response = await api.get('/obras/fyag/v1/notificaciones-tecnico/');
+    return response.data;
+  },
+
   async getSolicitudesCambio() {
     const response = await api.get('/obras/fyag/v1/solicitudes-cambio-obra/');
     return response.data;

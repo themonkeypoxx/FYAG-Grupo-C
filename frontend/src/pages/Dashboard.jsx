@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ClasificacionServicios from '../components/ClasificacionServicios';
+import GraficoDashObras from '../components/GraficoDashObras';
 import ObraCard from '../components/ObraCard';
 import ModalCambiarEstado from '../components/ModalCambiarEstado';
 import obrasService from '../Servicios/obrasService';
@@ -347,6 +348,16 @@ const bloqueOcupado = (bloque) => {
         conteoPorTipo={conteoPorTipo}
         totalObras={totalObras}
       />
+
+      <section className="solicitudes-panel" aria-label="Obras por estado operativo">
+        <div className="solicitudes-panel-header">
+          <div>
+            <h2>Obras por estado operativo</h2>
+            <p>Cantidad de obras pendientes, en ejecución, suspendidas, finalizadas y canceladas.</p>
+          </div>
+        </div>
+        <GraficoDashObras />
+      </section>
 
       <div className="filters-row">
         <div className="search-box">
