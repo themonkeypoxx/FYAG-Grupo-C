@@ -7,6 +7,8 @@ from .validators import validar_rut
 from .services import obtener_transiciones_posibles, validar_transicion_estado
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from fyag_mongoDB.servicio_maquinarias import obtener_maquinas_por_obra
+
 # Serializador de Tipos de Servicio (Mantención, Climatización, Proyecto eléctrico, Emergencia, Garantía, Proyecto)
 class TipoServ_Serializer(serializers.ModelSerializer):
     class Meta:
@@ -68,10 +70,20 @@ class Obras_Serializer(serializers.ModelSerializer):
     supervisor_nombre = serializers.SerializerMethodField()
     tecnicos_asignados = serializers.SerializerMethodField()
     transiciones_posibles = serializers.SerializerMethodField()
+    maquinarias_asignadas = serializers.SerializerMethodField()
+    maquinarias_codigos = serializers.ListField(
+        child=serializers.CharField(), required=False, write_only=True
+    )
 
     class Meta:
         model = Obra
         fields = '__all__'
+
+    def get_maquinarias_asignadas(self, obj):
+        try:
+            return obtener_maquinas_por_obra(obj.id_obra)
+        except Exception:
+            return []
 
     def get_supervisor_nombre(self, obj):
         if not obj.supervisor:
@@ -89,9 +101,9 @@ class Obras_Serializer(serializers.ModelSerializer):
                 "id_asignacion": asignacion.id_asignacion,
                 "tecnico": asignacion.tecnico_id,
                 "tecnico_nombre": asignacion.tecnico.get_full_name() or asignacion.tecnico.username,
-                "fecha": asignacion.fecha,
-                "hora_inicio": asignacion.hora_inicio,
-                "hora_termino": asignacion.hora_termino,
+                "fecha": str(asignacion.fecha) if asignacion.fecha else None,
+                "hora_inicio": str(asignacion.hora_inicio)[:5] if asignacion.hora_inicio else None,
+                "hora_termino": str(asignacion.hora_termino)[:5] if asignacion.hora_termino else None,
             }
             for asignacion in asignaciones
         ]

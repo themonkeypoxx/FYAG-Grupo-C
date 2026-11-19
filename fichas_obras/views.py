@@ -35,6 +35,11 @@ from .services import aplicar_transicion_estado, validar_transicion_estado
 
 from fyag_mongoDB.mixins import AuditModelViewSetMixin
 from fyag_mongoDB.servicios import registrar_evento
+from fyag_mongoDB.servicio_maquinarias import (
+    asignar_maquina_a_obra,
+    liberar_maquina,
+    obtener_maquinas_por_obra,
+)
 
 
 def notificar_tecnicos_de_obra(obra, estado_codigo):
@@ -114,6 +119,32 @@ class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
             )
 
         return queryset
+
+    def perform_create(self, serializer):
+        codigos_maquinas = serializer.validated_data.pop('maquinarias_codigos', [])
+        super().perform_create(serializer)
+        obra = serializer.instance
+        for codigo in codigos_maquinas:
+            try:
+                asignar_maquina_a_obra(codigo, obra.id_obra)
+            except Exception:
+                pass
+
+    def perform_update(self, serializer):
+        codigos_nuevos = serializer.validated_data.pop('maquinarias_codigos', None)
+        super().perform_update(serializer)
+        obra = serializer.instance
+        if codigos_nuevos is not None:
+            try:
+                maquinas_anteriores = obtener_maquinas_por_obra(obra.id_obra)
+                for m in maquinas_anteriores:
+                    codigo_ant = m.get('codigo')
+                    if codigo_ant and codigo_ant not in codigos_nuevos:
+                        liberar_maquina(codigo_ant)
+                for codigo in codigos_nuevos:
+                    asignar_maquina_a_obra(codigo, obra.id_obra)
+            except Exception:
+                pass
 
     @action(detail=True, methods=["post"], url_path="cambiar-estado")
     def cambiar_estado(self, request, pk=None):
