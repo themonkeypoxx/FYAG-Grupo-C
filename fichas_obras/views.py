@@ -33,6 +33,9 @@ from .serializer import (
 )
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
+from fyag_mongoDB.mixins import AuditModelViewSetMixin
+from fyag_mongoDB.servicios import registrar_evento
+
 
 def notificar_tecnicos_de_obra(obra, estado_codigo):
     """Guarda un aviso para cada técnico con asignaciones activas en la obra."""
@@ -46,7 +49,7 @@ def notificar_tecnicos_de_obra(obra, estado_codigo):
         for tecnico_id in tecnico_ids
     ])
 
-class Crud_obras(viewsets.ModelViewSet):
+class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo | EsTecnico]
     """
     CRUD principal de Obras con clasificación por tipo de servicio,
@@ -114,14 +117,6 @@ class Crud_obras(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="cambiar-estado")
     def cambiar_estado(self, request, pk=None):
-        """
-        Ejecuta la transición del estado operativo de una obra según la máquina de estados.
-        Payload esperado:
-        {
-            "nuevo_estado": "EJECUCION" (código de estado) o id numérico,
-            "motivo": "Explicación en caso de SUSPENDIDA o CANCELADA"
-        }
-        """
         obra = self.get_object()
         nuevo_estado_val = request.data.get("nuevo_estado")
         motivo = request.data.get("motivo")
@@ -151,6 +146,8 @@ class Crud_obras(viewsets.ModelViewSet):
         else:
             codigo_destino = str(nuevo_estado_val).strip().upper()
 
+        estado_anterior = obra.estado_obra.codigo_estado
+
         try:
             obra_actualizada = aplicar_transicion_estado(
                 obra=obra,
@@ -158,6 +155,20 @@ class Crud_obras(viewsets.ModelViewSet):
                 motivo=motivo
             )
             notificar_tecnicos_de_obra(obra, codigo_destino)
+
+            registrar_evento(
+                request=request,
+                accion="CAMBIO_ESTADO",
+                recurso="Obra",
+                recurso_id=obra_actualizada.id_obra,
+                detalles={
+                    "codigo_obra": obra_actualizada.codigo_obra,
+                    "estado_anterior": estado_anterior,
+                    "estado_nuevo": codigo_destino,
+                    "motivo": motivo,
+                },
+            )
+
             serializer = self.get_serializer(obra_actualizada)
             return Response(
                 {
@@ -384,6 +395,19 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
                 {"detail": "El técnico no tiene asignaciones activas en esta obra."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        registrar_evento(
+            request=request,
+            accion="DESASIGNAR_TECNICO",
+            recurso="AsignacionTecnico",
+            recurso_id=obra_id,
+            detalles={
+                "obra_id": obra_id,
+                "tecnico_id": tecnico_id,
+                "asignaciones_desactivadas": cantidad,
+            },
+        )
+
         return Response({"mensaje": "Técnico desasignado de la obra.", "asignaciones_desactivadas": cantidad})
 
     @action(detail=False, methods=["get"], url_path="tecnicos")
@@ -480,10 +504,23 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
                 "estado", "respuesta_supervisor", "supervisor_respuesta", "respondida_en"
             ])
 
+        registrar_evento(
+            request=request,
+            accion=f"SOLICITUD_{accion}",
+            recurso="SolicitudCambioObra",
+            recurso_id=solicitud.id_solicitud,
+            detalles={
+                "obra_id": solicitud.obra_id,
+                "tipo_solicitud": solicitud.tipo,
+                "resolucion": accion,
+                "respuesta_supervisor": respuesta,
+            },
+        )
+
         return Response(self.get_serializer(solicitud).data)
 
 
-class PresupuestoViewSet(viewsets.ModelViewSet):
+class PresupuestoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = PresupuestoSerializer
 
@@ -521,7 +558,7 @@ class ItemPresupuestoViewSet(viewsets.ModelViewSet):
     queryset = ItemPresupuesto.objects.select_related("presupuesto").all()
 
 
-class FacturaViewSet(viewsets.ModelViewSet):
+class FacturaViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = FacturaSerializer
     queryset = Factura.objects.select_related("presupuesto", "cliente").filter(soft_deleted=False).order_by("-fecha_emision")
@@ -555,6 +592,18 @@ class FacturaViewSet(viewsets.ModelViewSet):
                 factura.saldo_pendiente = nuevo_saldo
                 factura.estado_pago = Factura.EstadoPago.PAGADO if nuevo_saldo == Decimal("0.00") else Factura.EstadoPago.PAGO_PARCIAL
                 factura.save()
+
+                registrar_evento(
+                    request=request,
+                    accion="REGISTRO_PAGO",
+                    recurso="Factura",
+                    recurso_id=factura.id_factura,
+                    detalles={
+                        "monto_abono": str(abono),
+                        "nuevo_saldo": str(factura.saldo_pendiente),
+                        "estado_pago": factura.estado_pago,
+                    },
+                )
             except Exception as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         elif nuevo_estado:
@@ -567,6 +616,17 @@ class FacturaViewSet(viewsets.ModelViewSet):
             elif nuevo_estado == Factura.EstadoPago.PENDIENTE:
                 factura.saldo_pendiente = factura.monto_total
             factura.save()
+
+            registrar_evento(
+                request=request,
+                accion="CAMBIO_ESTADO_PAGO",
+                recurso="Factura",
+                recurso_id=factura.id_factura,
+                detalles={
+                    "estado_pago": factura.estado_pago,
+                    "saldo_pendiente": str(factura.saldo_pendiente),
+                },
+            )
         else:
             return Response({"error": "Debe especificar 'estado_pago' o 'monto_abono'."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -576,7 +636,7 @@ class FacturaViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
-class RegistroPagoViewSet(viewsets.ModelViewSet):
+class RegistroPagoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = RegistroPagoSerializer
     queryset = RegistroPago.objects.select_related("factura", "registrador").order_by("-fecha_pago")
