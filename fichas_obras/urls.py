@@ -4,7 +4,7 @@ from django.urls import path, include
 from rest_framework import routers
 
 from .views import *
-from .financial_views import ResumenFinancieroView
+from .financial_views import ResumenFinancieroView, KPIsDashboardView
 
 
 # Versionado de API
@@ -29,6 +29,11 @@ urlpatterns = [
         "fyag/v1/resumen-financiero/",
         ResumenFinancieroView.as_view(),
         name="resumen-financiero"
+    ),
+    path(
+        "fyag/v1/kpis/",
+        KPIsDashboardView.as_view(),
+        name="kpis-dashboard"
     ),
     path("fyag/v1/", include(router.urls))
 ]
