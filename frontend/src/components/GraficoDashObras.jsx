@@ -17,9 +17,10 @@ export default function GraficoDashObras() {
     async function cargarResumen() {
       try {
         const res = await obrasService.getResumenEstados();
-        setDatos(res || []);
+        setDatos(Array.isArray(res) ? res : []);
       } catch (err) {
         console.error('Error al cargar resumen de estados:', err);
+        setDatos([]);
       } finally {
         setCargando(false);
       }
@@ -31,7 +32,10 @@ export default function GraficoDashObras() {
     return <div style={{ padding: '1rem', color: 'var(--text-muted)' }}>Cargando métricas...</div>;
   }
 
-  const total = datos.reduce((acc, curr) => acc + (curr.cantidad_obras || 0), 0);
+  const lista = Array.isArray(datos) ? datos : [];
+  if (lista.length === 0) {
+    return null;
+  }
 
   return (
     <div
@@ -42,7 +46,7 @@ export default function GraficoDashObras() {
         margin: '1rem 0',
       }}
     >
-      {datos.map((item) => {
+      {lista.map((item) => {
         const color = COLORES_ESTADO[item.codigo_estado] || '#64748b';
         return (
           <div
