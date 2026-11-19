@@ -246,31 +246,10 @@ class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="resumen-estados")
     def resumen_estados(self, request):
         """
-        Retorna la cantidad de obras agrupadas por estado operativo.
+        Retorna la cantidad y porcentaje de obras agrupadas por estado operativo.
         """
-        estados = EstadoObra.objects.all().order_by("id_estado_obra")
-        conteo_por_estado = dict(
-            Obra.objects.values("estado_obra_id")
-            .annotate(total=Count("id_obra"))
-            .values_list("estado_obra_id", "total")
-        )
-
-        resultado = []
-        total_obras = 0
-        for est in estados:
-            cant = conteo_por_estado.get(est.id_estado_obra, 0)
-            total_obras += cant
-            resultado.append({
-                "id_estado_obra": est.id_estado_obra,
-                "codigo_estado": est.codigo_estado,
-                "descripcion": est.descripcion,
-                "cantidad_obras": cant,
-            })
-
-        return Response({
-            "total_obras": total_obras,
-            "estados": resultado,
-        })
+        from .resumen_financiero import calcular_obras_por_estado
+        return Response(calcular_obras_por_estado())
 
 
 class TipoServicioViewSet(viewsets.ReadOnlyModelViewSet):
@@ -446,7 +425,15 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         tecnicos = User.objects.filter(groups__name__in=["Tecnico", "TECNICO", "Técnico"], is_active=True).distinct().order_by("first_name", "last_name", "username")
-        return Response([{"id": user.pk, "username": user.username, "nombre": user.get_full_name() or user.username} for user in tecnicos])
+        return Response([
+            {
+                "id": user.pk,
+                "username": user.username,
+                "nombre": user.get_full_name() or user.username,
+                "email": user.email,
+            }
+            for user in tecnicos
+        ])
 
 
 class NotificacionTecnicoViewSet(viewsets.ReadOnlyModelViewSet):

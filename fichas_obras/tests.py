@@ -989,3 +989,64 @@ class ResumenFinancieroTests(TestCase):
         res = self.client.get(self.ENDPOINT)
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_kpi_total_facturado_en_resumen(self):
+        """Verifica que el KPI de total facturado se actualice con las facturas emitidas."""
+        self._crear_factura("FAC-TEST-001", date(2026, 1, 31))
+        self._crear_factura("FAC-TEST-002", date(2099, 12, 31))
+
+        res = self.client.get(self.ENDPOINT)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(res.data["total_facturado"]), Decimal("200000.00"))
+
+    def test_kpis_obras_por_estado_endpoint(self):
+        """Verifica la consulta agregada de obras agrupadas por estado operativo."""
+        res = self.client.get("/obras/fyag/v1/obras/resumen-estados/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("total_obras", res.data)
+        self.assertIn("estados", res.data)
+        self.assertGreaterEqual(res.data["total_obras"], 1)
+
+        # Cada estado debe tener cantidad_obras y porcentaje
+        for est in res.data["estados"]:
+            self.assertIn("cantidad_obras", est)
+            self.assertIn("porcentaje", est)
+
+    def test_kpis_morosidad_conteo_facturas_y_clientes(self):
+        """Verifica KPIs de morosidad avanzada: facturas vencidas y clientes morosos."""
+        from .resumen_financiero import calcular_conteo_facturas_morosas, calcular_clientes_morosos
+
+        # Inicialmente 0 morosas
+        self.assertEqual(calcular_conteo_facturas_morosas(), 0)
+        self.assertEqual(calcular_clientes_morosos(), 0)
+
+        # Crear factura vencida
+        self._crear_factura("FAC-MORA-001", date(2026, 1, 15))
+
+        self.assertEqual(calcular_conteo_facturas_morosas(), 1)
+        self.assertEqual(calcular_clientes_morosos(), 1)
+
+    def test_kpis_dashboard_consolidado_endpoint(self):
+        """Verifica el endpoint consolidado de KPIs (facturacion, obras_por_estado, morosidad)."""
+        res = self.client.get("/obras/fyag/v1/kpis/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        self.assertIn("facturacion", res.data)
+        self.assertIn("obras_por_estado", res.data)
+        self.assertIn("morosidad", res.data)
+
+        fact = res.data["facturacion"]
+        self.assertIn("total_facturado", fact)
+        self.assertIn("total_cobrado", fact)
+        self.assertIn("deuda_pendiente", fact)
+        self.assertIn("facturas_por_estado", fact)
+
+        obras = res.data["obras_por_estado"]
+        self.assertIn("total_obras", obras)
+        self.assertIn("estados", obras)
+
+        mora = res.data["morosidad"]
+        self.assertIn("deuda_vencida", mora)
+        self.assertIn("porcentaje_morosidad", mora)
+        self.assertIn("facturas_vencidas_cantidad", mora)
+        self.assertIn("clientes_morosos_cantidad", mora)
+
