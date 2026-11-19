@@ -22,11 +22,15 @@ from django.urls import path
 # es para usar el custom token obtain en lugar del q viene x defecto en drf!!!!
 from fichas_obras.views import CustomTokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
+from fyag_mongoDB.views import MaquinariaCatalogView, AsignarMaquinariaView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/maquinarias/', MaquinariaCatalogView.as_view(), name='catalogo-maquinarias'),
+    path('api/maquinarias/asignar/', AsignarMaquinariaView.as_view(), name='asignar-maquinaria'),
+    path('obras/fyag/v1/maquinarias/', MaquinariaCatalogView.as_view(), name='catalogo-maquinarias-v1'),
     path('obras/', include('fichas_obras.urls')),
 ]
 #

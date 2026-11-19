@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'fichas_obras',
+    'fyag_mongoDB',
 
 
 ]
@@ -89,6 +90,10 @@ DATABASES = {
     }
 }
 
+
+# Conexión a MongoDB. Cuando se vaya a subir para el MVP no olvidar poner la url cm variable en env
+MONGO_URI = 'mongodb://localhost:27017/'
+MONGO_DB_NAME = 'fyag'
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators

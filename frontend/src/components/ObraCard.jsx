@@ -119,6 +119,36 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
           )}
         </div>
 
+        {/* Maquinarias asignadas (MongoDB) */}
+        <div className="tecnicos-asignados" style={{ marginTop: '0.75rem' }}>
+          <strong>🚜 Maquinarias asignadas</strong>
+          {obra.maquinarias_asignadas && obra.maquinarias_asignadas.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.4rem' }}>
+              {obra.maquinarias_asignadas.map((m) => (
+                <span
+                  key={m.codigo}
+                  style={{
+                    fontSize: '0.78rem',
+                    padding: '0.25rem 0.6rem',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    color: 'var(--primary, #2563eb)',
+                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                  }}
+                  title={`Código: ${m.codigo} · Tipo: ${m.tipo || ''}${m.patente ? ' · Patente: ' + m.patente : ''}`}
+                >
+                  ⚙️ <strong>{m.codigo}:</strong> {m.nombre}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="sin-tecnicos">Sin maquinarias asignadas</span>
+          )}
+        </div>
+
         {/* Alerta de motivo en caso de suspensión o cancelación */}
         {obra.motivo_suspension_cancelacion && (
           <div className="motivo-alerta">

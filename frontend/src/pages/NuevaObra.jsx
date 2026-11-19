@@ -11,6 +11,8 @@ export default function NuevaObra() {
   const [clientes, setClientes] = useState([]);
   const [tiposServicio, setTiposServicio] = useState([]);
   const [estados, setEstados] = useState([]);
+  const [catalogoMaquinarias, setCatalogoMaquinarias] = useState([]);
+  const [maquinasSeleccionadas, setMaquinasSeleccionadas] = useState([]);
   const [tecnicosDisponibles, setTecnicosDisponibles] = useState([]);
 
   const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
@@ -41,10 +43,14 @@ export default function NuevaObra() {
     async function cargarCatalogos() {
       try {
         setCargandoCatalogos(true);
-        const [cls, tipos, ests, tecs] = await Promise.all([
+        const [cls, tipos, ests, maqs, tecs] = await Promise.all([
           obrasService.getClientes(),
           obrasService.getTiposServicio(),
           obrasService.getEstadosObra(),
+          obrasService.getMaquinarias().catch((err) => {
+            console.warn('No se pudo cargar el catálogo de maquinarias desde MongoDB:', err);
+            return [];
+          }),
           obrasService.getTecnicos().catch((err) => {
             console.warn('No se pudieron cargar técnicos:', err);
             return [];
@@ -54,7 +60,9 @@ export default function NuevaObra() {
         setClientes(cls);
         setTiposServicio(tipos);
         setEstados(ests);
+        setCatalogoMaquinarias(maqs || []);
         setTecnicosDisponibles(tecs || []);
+
 
         const pendiente = ests.find((e) => e.codigo_estado === 'PENDIENTE') || ests[0];
         setFormData((prev) => ({
@@ -216,6 +224,7 @@ export default function NuevaObra() {
         fecha_inicio: formData.fecha_inicio,
         fecha_termino_estimada: formData.fecha_termino_estimada || null,
         costo_estimado: formData.costo_estimado ? parseFloat(formData.costo_estimado) : 0,
+        maquinarias_codigos: maquinasSeleccionadas,
       };
 
       const obraCreada = await obrasService.crearObra(payload);
@@ -762,7 +771,76 @@ export default function NuevaObra() {
           </div>
         </div>
 
+        {/* Sección de Asignación de Maquinarias (Catálogo MongoDB) */}
+        <div style={{ marginTop: '1.25rem', padding: '1rem', background: 'var(--surface-muted, #f8fafc)', borderRadius: '8px', border: '1px solid var(--border, #e2e8f0)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <label style={{ margin: 0, fontWeight: 'bold', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>🚜</span> Catálogo de Maquinarias y Equipos
+            </label>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #64748b)' }}>
+              {maquinasSeleccionadas.length} seleccionada{maquinasSeleccionadas.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: 'var(--text-muted, #64748b)' }}>
+            Selecciona las maquinarias que estarán asignadas a esta faena:
+          </p>
+          {catalogoMaquinarias.length === 0 ? (
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted, #64748b)', fontStyle: 'italic' }}>
+              No hay maquinarias registradas o disponibles en el catálogo.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '0.6rem' }}>
+              {catalogoMaquinarias.map((maq) => {
+                const seleccionada = maquinasSeleccionadas.includes(maq.codigo);
+                const ocupadaPorOtra = maq.estado === 'ASIGNADA';
+
+                return (
+                  <label
+                    key={maq.codigo}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.6rem',
+                      padding: '0.6rem 0.75rem',
+                      borderRadius: '6px',
+                      background: seleccionada ? 'rgba(59, 130, 246, 0.08)' : 'var(--surface, #ffffff)',
+                      border: seleccionada ? '1px solid #3b82f6' : '1px solid var(--border, #cbd5e1)',
+                      cursor: ocupadaPorOtra ? 'not-allowed' : 'pointer',
+                      opacity: ocupadaPorOtra ? 0.6 : 1,
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={ocupadaPorOtra}
+                      checked={seleccionada}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setMaquinasSeleccionadas([...maquinasSeleccionadas, maq.codigo]);
+                        } else {
+                          setMaquinasSeleccionadas(maquinasSeleccionadas.filter((c) => c !== maq.codigo));
+                        }
+                      }}
+                      style={{ marginTop: '0.2rem' }}
+                    />
+                    <div style={{ fontSize: '0.85rem' }}>
+                      <div style={{ fontWeight: '600', color: 'var(--text, #1e293b)' }}>
+                        {maq.codigo} · {maq.nombre}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)' }}>
+                        {maq.tipo} {maq.patente ? `· Patente: ${maq.patente}` : ''}
+                        {ocupadaPorOtra && <span style={{ color: '#ef4444', marginLeft: '0.3rem' }}>(Asignada a otra obra)</span>}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Botones de acción */}
+
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
           <Link to="/dashboard-obras" className="btn-secondary" style={{ textDecoration: 'none' }}>
             Cancelar

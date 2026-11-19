@@ -112,6 +112,20 @@ export const obrasService = {
     });
     return response.data;
   },
+
+
+  async getMaquinarias() {
+    const response = await api.get('/obras/fyag/v1/maquinarias/');
+    return response.data;
+  },
+
+  async asignarMaquinaria(codigoMaquina, obraId) {
+    const response = await api.post('/api/maquinarias/asignar/', {
+      codigo_maquina: codigoMaquina,
+      obra_id: obraId,
+    });
+    return response.data;
+  },
 };
 
 export default obrasService;
