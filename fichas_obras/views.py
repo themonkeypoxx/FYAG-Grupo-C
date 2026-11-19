@@ -370,7 +370,15 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         tecnicos = User.objects.filter(groups__name__in=["Tecnico", "TECNICO", "Técnico"], is_active=True).distinct().order_by("first_name", "last_name", "username")
-        return Response([{"id": user.pk, "username": user.username, "nombre": user.get_full_name() or user.username} for user in tecnicos])
+        return Response([
+            {
+                "id": user.pk,
+                "username": user.username,
+                "nombre": user.get_full_name() or user.username,
+                "email": user.email,
+            }
+            for user in tecnicos
+        ])
 
 
 class NotificacionTecnicoViewSet(viewsets.ReadOnlyModelViewSet):
