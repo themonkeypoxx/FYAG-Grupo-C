@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/resumen_financiero.css' %}">
+</head>
+<body>
+
+  <!-- CABECERA DEL REPORTE -->
+  <div class="header-box">
+    <table class="header-table">
+      <tr>
+        <td class="header-title-cell"> 
+          <img src="{% static 'logotipo/fyag_logo.png' %}" alt="FYAG" height="50">
+        </td>
+        <td class="header-title-cell">
+          <h1>FYAG · Reporte Resumen Financiero y KPIs</h1>
+          <div class="meta">Sistema de Gestión de Obras y Finanzas</div>
+        </td>
+        <td class="header-meta-cell">
+          <div class="meta"><strong>Fecha emisión:</strong> {{ fecha_generacion }}</div>
+          {% if usuario %}<div class="meta"><strong>Generado por:</strong> {{ usuario.get_full_name|default:usuario.username }}</div>{% endif %}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!--!!!!!!!!! INDICADORES CLAVE Y KPIS -->
+  {% if incluye_indicadores and indicadores %}
+  <h2>1. Indicadores Financieros Clave (KPIs)</h2>
+  <table class="kpi-table">
+    <tr>
+      <td class="kpi-card">
+        <div class="kpi-title">Total Facturado</div>
+        <div class="kpi-value">{{ indicadores.total_facturado }}</div>
+        <div class="kpi-desc">Monto total emitido en facturas activas</div>
+      </td>
+      <td class="kpi-card">
+        <div class="kpi-title">Total Cobrado</div>
+        <div class="kpi-value text-success">{{ indicadores.total_cobrado }}</div>
+        <div class="kpi-desc">Total de abonos recibidos y registrados</div>
+      </td>
+      <td class="kpi-card">
+        <div class="kpi-title">Presupuesto Estimado</div>
+        <div class="kpi-value">{{ indicadores.presupuesto_estimado }}</div>
+        <div class="kpi-desc">Valor total estimado de las obras</div>
+      </td>
+    </tr>
+    <tr>
+      <td class="kpi-card">
+        <div class="kpi-title">Saldo Estimado por Cobrar</div>
+        <div class="kpi-value">{{ indicadores.saldo_estimado_por_cobrar }}</div>
+        <div class="kpi-desc">Presupuesto menos pagos asociados</div>
+      </td>
+      <td class="kpi-card">
+        <div class="kpi-title">Deuda Pendiente Total</div>
+        <div class="kpi-value text-warning">{{ indicadores.deuda_pendiente }}</div>
+        <div class="kpi-desc">Saldo pendiente global por cobrar</div>
+      </td>
+      <td class="kpi-card">
+        <div class="kpi-title">Deuda Vencida</div>
+        <div class="kpi-value text-danger">{{ indicadores.deuda_vencida }}</div>
+        <div class="kpi-desc">Saldo de facturas fuera de plazo</div>
+      </td>
+    </tr>
+    <tr>
+      <td class="kpi-card">
+        <div class="kpi-title">Tasa de Morosidad</div>
+        <div class="kpi-value text-danger">{{ indicadores.porcentaje_morosidad }}</div>
+        <div class="kpi-desc">Proporción de deuda vencida sobre pendiente</div>
+      </td>
+      <td class="kpi-card">
+        <div class="kpi-title">Facturas Vencidas</div>
+        <div class="kpi-value">{{ indicadores.facturas_vencidas_cantidad }}</div>
+        <div class="kpi-desc">Facturas impagas vencidas a la fecha</div>
+      </td>
+      <td class="kpi-card">
+        <div class="kpi-title">Clientes Morosos</div>
+        <div class="kpi-value">{{ indicadores.clientes_morosos_cantidad }}</div>
+        <div class="kpi-desc">Clientes con facturas vencidas activas</div>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  <!-- DISTRIBUCIÓN DE OBRAS POR ESTADO -->
+  {% if incluye_obras_estado and obras_por_estado %}
+  <h2>2. Distribución de Obras por Estado (Total: {{ obras_por_estado.total_obras }} obras)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th width="35%">Estado de Obra</th>
+        <th width="20%">Código</th>
+        <th width="20%" class="right">Cantidad de Obras</th>
+        <th width="25%" class="right">% del Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for est in obras_por_estado.estados %}
+      <tr>
+        <td><strong>{{ est.descripcion }}</strong></td>
+        <td>{{ est.codigo_estado }}</td>
+        <td class="right">{{ est.cantidad_obras }}</td>
+        <td class="right">{{ est.porcentaje }}%</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="4" class="center text-muted">No se registraron obras.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- FACTURACIÓN POR ESTADO DE PAGO -->
+  {% if incluye_facturas_estado and facturas_por_estado %}
+  <h2>3. Desglose de Facturación por Estado de Pago</h2>
+  <table>
+    <thead>
+      <tr>
+        <th width="28%">Estado de Pago</th>
+        <th width="18%" class="right">Cantidad Facturas</th>
+        <th width="27%" class="right">Monto Total Facturado</th>
+        <th width="27%" class="right">Saldo Pendiente</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in facturas_por_estado %}
+      <tr>
+        <td>
+          <span class="badge {% if f.estado_pago == 'Pagado' %}badge-pagado{% elif f.estado_pago == 'Pago Parcial' %}badge-parcial{% else %}badge-pendiente{% endif %}">
+            {{ f.estado_pago }}
+          </span>
+        </td>
+        <td class="right">{{ f.cantidad }}</td>
+        <td class="right">{{ f.monto_total }}</td>
+        <td class="right text-danger bold">{{ f.saldo_pendiente }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="4" class="center text-muted">No hay registros de facturas disponibles.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!--  EVOLUCIÓN MENSUAL DE FACTURACIÓN -->
+  {% if incluye_evolucion_mensual and evolucion_mensual %}
+  <h2>4. Evolución Mensual de Facturación y Recaudación</h2>
+  <table>
+    <thead>
+      <tr>
+        <th width="22%">Mes Emisión</th>
+        <th width="18%" class="right">N° Facturas</th>
+        <th width="20%" class="right">Facturado</th>
+        <th width="20%" class="right">Cobrado</th>
+        <th width="20%" class="right">Saldo Pendiente</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in evolucion_mensual %}
+      <tr>
+        <td><strong>{{ item.mes }}</strong></td>
+        <td class="right">{{ item.cantidad_facturas }}</td>
+        <td class="right">{{ item.facturado }}</td>
+        <td class="right text-success">{{ item.cobrado }}</td>
+        <td class="right text-danger">{{ item.pendiente }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="5" class="center text-muted">Sin datos mensuales disponibles.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- SECCIÓN 5: COMPARATIVA PRESUPUESTO VS COSTO REAL -->
+  {% if incluye_presupuesto_real and presup_vs_real %}
+  <h2>5. Comparativa Presupuesto Estimado vs Costo Real por Servicio</h2>
+  <table>
+    <thead>
+      <tr>
+        <th width="40%">Tipo de Servicio</th>
+        <th width="15%" class="right">N° Obras</th>
+        <th width="22%" class="right">Costo Estimado</th>
+        <th width="23%" class="right">Costo Real</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in presup_vs_real %}
+      <tr>
+        <td><strong>{{ item.servicio|default:"Sin especificar" }}</strong></td>
+        <td class="right">{{ item.cantidad }}</td>
+        <td class="right">{{ item.costo_estimado }}</td>
+        <td class="right">{{ item.costo_real }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="4" class="center text-muted">Sin datos de servicios registrados.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!--  TOP CLIENTES MOROSOS -->
+  {% if incluye_top_morosos and top_morosos %}
+  <h2>6. Ranking de Morosidad (Top Clientes con Mayor Deuda Vencida)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th width="45%">Razón Social / Cliente</th>
+        <th width="20%">RUT</th>
+        <th width="15%" class="right">Facturas Vencidas</th>
+        <th width="20%" class="right">Deuda Vencida</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in top_morosos %}
+      <tr>
+        <td><strong>{{ m.cliente }}</strong></td>
+        <td>{{ m.rut }}</td>
+        <td class="right">{{ m.facturas_vencidas }}</td>
+        <td class="right text-danger bold">{{ m.deuda_vencida }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="4" class="center text-success">No se registran clientes con facturas vencidas pendientes.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- PIE DE PÁGINA -->
+  <div id="footer_content">
+    Página <pdf:pagenumber> de <pdf:pagecount> &nbsp;|&nbsp; Reporte Financiero FYAG &nbsp;|&nbsp; {{ fecha_generacion }}
+  </div>
+
+</body>
+</html>

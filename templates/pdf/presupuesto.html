@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/pdf/presupuesto.css' %}">
+</head>
+<body>
+
+  <!-- ENCABEZADO -->
+  <div class="header">
+    <h1>Presupuesto {{ obj.numero_presupuesto }}</h1>
+    <div class="meta">
+      Estado:
+      <span class="badge {% if obj.estado_presupuesto == 'Aprobado' %}badge-aprobado{% elif obj.estado_presupuesto == 'Rechazado' %}badge-rechazado{% else %}badge-otro{% endif %}">
+        {{ obj.estado_presupuesto }}
+      </span>
+    </div>
+    <div class="meta">Creado por: {{ obj.creador.get_full_name|default:obj.creador.username }}</div>
+    {% if obj.aprobador_gerencia %}
+    <div class="meta">Aprobado por: {{ obj.aprobador_gerencia.get_full_name|default:obj.aprobador_gerencia.username }}</div>
+    {% endif %}
+  </div>
+
+  <!-- DATOS CLIENTE / OBRA -->
+  <table style="border-collapse:collapse; margin-bottom:14px;">
+    <tr>
+      <td style="width:50%; vertical-align:top; padding:0 10px 0 0; border:none;">
+        <h2>Cliente</h2>
+        <div class="meta"><strong>{{ obj.cliente.razon_social }}</strong></div>
+        <div class="meta">RUT: {{ obj.cliente.rut_empresa }}</div>
+        {% if obj.cliente.giro_comercial %}<div class="meta">Giro: {{ obj.cliente.giro_comercial }}</div>{% endif %}
+        {% if obj.cliente.direccion_matriz %}<div class="meta">Dirección: {{ obj.cliente.direccion_matriz }}</div>{% endif %}
+        {% if obj.cliente.ciudad %}<div class="meta">{{ obj.cliente.comuna }}, {{ obj.cliente.ciudad }}</div>{% endif %}
+        {% if obj.cliente.contacto_nombre %}<div class="meta">Contacto: {{ obj.cliente.contacto_nombre }}</div>{% endif %}
+        {% if obj.cliente.contacto_email %}<div class="meta">Email: {{ obj.cliente.contacto_email }}</div>{% endif %}
+      </td>
+      <td style="width:50%; vertical-align:top; padding:0; border:none;">
+        <h2>Proyecto / Obra</h2>
+        <div class="meta"><strong>{{ obj.obra.codigo_obra }}</strong> — {{ obj.obra.nombre_obra }}</div>
+        <div class="meta">Ubicación: {{ obj.obra.ubicacion_faena }}</div>
+        <div class="meta">Inicio: {{ obj.obra.fecha_inicio }}</div>
+        {% if obj.obra.fecha_termino_estimada %}<div class="meta">Término estimado: {{ obj.obra.fecha_termino_estimada }}</div>{% endif %}
+        <div class="meta">Estado obra: {{ obj.obra.estado_obra.descripcion }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ÍTEMS -->
+  <h2>Detalle de Ítems</h2>
+  {% if items %}
+  <table>
+    <thead>
+      <tr>
+        <th>Descripción</th>
+        <th width="12%">Unidad</th>
+        <th width="10%" class="right">Cant.</th>
+        <th width="16%" class="right">P. Unitario</th>
+        <th width="16%" class="right">Total Línea</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.descripcion_item }}</td>
+        <td>{{ item.unidad_medida }}</td>
+        <td class="right">{{ item.cantidad }}</td>
+        <td class="right">${{ item.precio_unitario }}</td>
+        <td class="right">${{ item.total_linea }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:#888; font-style:italic;">Sin ítems registrados.</p>
+  {% endif %}
+
+  <!-- TOTALES -->
+  <div class="totals-box">
+    <table>
+      <tr>
+        <td class="label">Subtotal (neto):</td>
+        <td class="amount right">${{ subtotal }}</td>
+      </tr>
+      <tr>
+        <td class="label">IVA (19%):</td>
+        <td class="amount right">${{ monto_iva }}</td>
+      </tr>
+      <tr>
+        <td class="grand">TOTAL:</td>
+        <td class="grand right">${{ total }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- FOOTER -->
+  <div id="footer_content">
+    Página <pdf:pagenumber> de <pdf:pagecount> &nbsp;|&nbsp; {{ obj.numero_presupuesto }} &nbsp;|&nbsp; Documento generado por FYAG
+  </div>
+</body>
+</html>
