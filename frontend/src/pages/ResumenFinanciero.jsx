@@ -1,8 +1,47 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { obtenerResumenFinanciero } from '../Servicios/resumenFinancieroService';
+import { obtenerResumenFinanciero, exportarResumenFinancieroPDF } from '../Servicios/resumenFinancieroService';
 import obrasService from '../Servicios/obrasService';
 import GraficosFinancieros from '../components/GraficosFinancieros';
+import './ResumenFinanciero.css';
 
+const OPCIONES_EXPORTACION = [
+    {
+        id: 'indicadores',
+        titulo: 'Indicadores Financieros y KPIs',
+        descripcion: 'Total facturado, total cobrado, deudas y tasa de morosidad.',
+        icono: '📊',
+    },
+    {
+        id: 'obras_estado',
+        titulo: 'Distribución de Obras por Estado',
+        descripcion: 'Conteo y porcentaje de obras según su estado operativo.',
+        icono: '🏗️',
+    },
+    {
+        id: 'facturas_estado',
+        titulo: 'Desglose de Facturas por Estado',
+        descripcion: 'Montos y saldos por estado de pago (Pagado, Parcial, Pendiente).',
+        icono: '🧾',
+    },
+    {
+        id: 'evolucion_mensual',
+        titulo: 'Evolución Mensual de Facturación',
+        descripcion: 'Histórico mensual de montos emitidos vs pagos recaudados.',
+        icono: '📈',
+    },
+    {
+        id: 'presupuesto_real',
+        titulo: 'Comparativa Presupuesto vs Costo Real',
+        descripcion: 'Comparativa económica de costo estimado vs real por servicio.',
+        icono: '⚖️',
+    },
+    {
+        id: 'top_morosos',
+        titulo: 'Ranking de Clientes Morosos',
+        descripcion: 'Clientes con facturas vencidas y mayor deuda pendiente.',
+        icono: '⚠️',
+    },
+];
 
 const formatearCLP = (monto) => {
     return new Intl.NumberFormat('es-CL', {
@@ -18,6 +57,66 @@ export default function ResumenFinanciero() {
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState('');
 
+    // Estados para el Modal de Exportación a PDF
+    const [modalPDF, setModalPDF] = useState(false);
+    const [seccionesSeleccionadas, setSeccionesSeleccionadas] = useState(
+        OPCIONES_EXPORTACION.reduce((acc, opt) => ({ ...acc, [opt.id]: true }), {})
+    );
+    const [exportandoPDF, setExportandoPDF] = useState(false);
+    const [errorPDF, setErrorPDF] = useState(null);
+
+    const toggleSeccion = (id) => {
+        setSeccionesSeleccionadas((prev) => ({
+            ...prev,
+            [id]: !prev[id],
+        }));
+        setErrorPDF(null);
+    };
+
+    const seleccionarTodas = (valor) => {
+        setSeccionesSeleccionadas(
+            OPCIONES_EXPORTACION.reduce((acc, opt) => ({ ...acc, [opt.id]: valor }), {})
+        );
+        setErrorPDF(null);
+    };
+
+    const handleExportarPDF = async () => {
+        const seleccionadas = Object.keys(seccionesSeleccionadas).filter(
+            (k) => seccionesSeleccionadas[k]
+        );
+
+        if (seleccionadas.length === 0) {
+            setErrorPDF('Debes seleccionar al menos un elemento para exportar.');
+            return;
+        }
+
+        setExportandoPDF(true);
+        setErrorPDF(null);
+
+        try {
+            const data = await exportarResumenFinancieroPDF(seleccionadas);
+            const blob = new Blob([data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const hoyStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            link.setAttribute('download', `resumen_financiero_${hoyStr}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            setModalPDF(false);
+        } catch (err) {
+            console.error('Error al exportar PDF:', err);
+            setErrorPDF(
+                err.response?.status === 403
+                    ? 'No tienes permisos para exportar el resumen financiero.'
+                    : 'Error al generar el archivo PDF. Intente de nuevo.'
+            );
+        } finally {
+            setExportandoPDF(false);
+        }
+    };
 
     const cargarResumen = useCallback(async () => {
         setCargando(true);
@@ -41,11 +140,9 @@ export default function ResumenFinanciero() {
         }
     }, []);
 
-
     useEffect(() => {
         cargarResumen();
     }, [cargarResumen]);
-
 
     const indicadores = resumen ? [
         {
@@ -87,57 +184,38 @@ export default function ResumenFinanciero() {
 
     return (
         <main className="main-content">
-            <header
-                style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: '1rem',
-                    marginBottom: '1.5rem',
-                    paddingBottom: '1rem',
-                    borderBottom: '1px solid var(--border)',
-                }}
-            >
+            <header className="rf-header">
                 <div>
-                    <h1 style={{ fontSize: '1.75rem', fontWeight: 800 }}>
+                    <h1 className="rf-header-title">
                         Resumen Financiero y KPIs
                     </h1>
-
-                    <p style={{ color: 'var(--text-muted)' }}>
+                    <p className="rf-header-subtitle">
                         Indicadores económicos, facturación, morosidad y estado de obras.
                     </p>
                 </div>
 
                 <button
                     type="button"
-                    className="btn-primary"
-                    disabled
-                    title="La generación del PDF será integrada por otro integrante del equipo."
-                    style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                    className="btn-primary rf-btn-exportar"
+                    onClick={() => {
+                        setErrorPDF(null);
+                        setModalPDF(true);
+                    }}
+                    title="Exportar resumen financiero a PDF"
                 >
-                    Exportar PDF
+                    <span>📥</span> Exportar a PDF
                 </button>
             </header>
 
             {cargando ? (
-                <p style={{ textAlign: 'center', padding: '3rem' }}>
+                <p className="rf-loading">
                     Cargando información financiera y KPIs...
                 </p>
             ) : error ? (
-                <div
-                    style={{
-                        padding: '2rem',
-                        textAlign: 'center',
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '12px',
-                    }}
-                >
-                    <p style={{ color: '#dc2626', marginBottom: '1rem' }}>
+                <div className="rf-error-card">
+                    <p className="rf-error-text">
                         {error}
                     </p>
-
                     <button
                         type="button"
                         className="btn-primary"
@@ -148,52 +226,16 @@ export default function ResumenFinanciero() {
                 </div>
             ) : (
                 <>
-                    <section
-                        aria-label="Indicadores financieros"
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                            gap: '1.25rem',
-                        }}
-                    >
+                    <section aria-label="Indicadores financieros" className="rf-kpi-grid">
                         {indicadores.map((indicador) => (
-                            <article
-                                key={indicador.titulo}
-                                style={{
-                                    background: 'var(--surface)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: '12px',
-                                    padding: '1.5rem',
-                                    boxShadow: 'var(--shadow-sm)',
-                                }}
-                            >
-                                <h2
-                                    style={{
-                                        fontSize: '0.95rem',
-                                        color: 'var(--text-muted)',
-                                        marginBottom: '0.75rem',
-                                    }}
-                                >
+                            <article key={indicador.titulo} className="rf-kpi-card">
+                                <h2 className="rf-kpi-title">
                                     {indicador.titulo}
                                 </h2>
-
-                                <p
-                                    style={{
-                                        fontSize: '1.65rem',
-                                        fontWeight: 800,
-                                        overflowWrap: 'anywhere',
-                                        marginBottom: '0.5rem',
-                                    }}
-                                >
+                                <p className="rf-kpi-valor">
                                     {indicador.valor}
                                 </p>
-
-                                <p
-                                    style={{
-                                        fontSize: '0.85rem',
-                                        color: 'var(--text-muted)',
-                                    }}
-                                >
+                                <p className="rf-kpi-desc">
                                     {indicador.descripcion}
                                 </p>
                             </article>
@@ -202,102 +244,40 @@ export default function ResumenFinanciero() {
 
                     {/* Sección de Obras por Estado */}
                     {resumenEstados?.estados && (
-                        <section
-                            aria-label="Distribución de obras por estado"
-                            style={{
-                                marginTop: '2.5rem',
-                                background: 'var(--surface)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '12px',
-                                padding: '1.5rem',
-                                boxShadow: 'var(--shadow-sm)',
-                            }}
-                        >
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    marginBottom: '1.25rem',
-                                    flexWrap: 'wrap',
-                                    gap: '0.5rem',
-                                }}
-                            >
+                        <section aria-label="Distribución de obras por estado" className="rf-obras-section">
+                            <div className="rf-obras-header">
                                 <div>
-                                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                                    <h2 className="rf-obras-title">
                                         Distribución de Obras por Estado
                                     </h2>
-                                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                    <p className="rf-obras-subtitle">
                                         Consultas agregadas y porcentaje de distribución sobre el total de obras activas.
                                     </p>
                                 </div>
-                                <span
-                                    style={{
-                                        fontSize: '0.95rem',
-                                        fontWeight: 700,
-                                        background: 'var(--surface-variant, #e0e7ff)',
-                                        color: 'var(--primary, #4338ca)',
-                                        padding: '0.35rem 0.85rem',
-                                        borderRadius: '9999px',
-                                    }}
-                                >
+                                <span className="rf-obras-badge-total">
                                     Total: {resumenEstados.total_obras || 0} obras
                                 </span>
                             </div>
 
-                            <div
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                    gap: '1rem',
-                                }}
-                            >
+                            <div className="rf-obras-grid">
                                 {resumenEstados.estados.map((est) => (
-                                    <div
-                                        key={est.id_estado_obra}
-                                        style={{
-                                            border: '1px solid var(--border)',
-                                            borderRadius: '8px',
-                                            padding: '1rem',
-                                            background: 'var(--surface-variant, #f9fafb)',
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'baseline',
-                                                marginBottom: '0.5rem',
-                                            }}
-                                        >
-                                            <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                                    <div key={est.id_estado_obra} className="rf-obra-card">
+                                        <div className="rf-obra-card-top">
+                                            <span className="rf-obra-label">
                                                 {est.descripcion}
                                             </span>
-                                            <span style={{ fontWeight: 700, fontSize: '1.15rem' }}>
+                                            <span className="rf-obra-cant">
                                                 {est.cantidad_obras}
                                             </span>
                                         </div>
-                                        <div
-                                            style={{
-                                                width: '100%',
-                                                height: '6px',
-                                                backgroundColor: '#e5e7eb',
-                                                borderRadius: '3px',
-                                                overflow: 'hidden',
-                                                marginBottom: '0.4rem',
-                                            }}
-                                        >
+                                        <div className="rf-obra-progress-bg">
                                             <div
-                                                style={{
-                                                    width: `${Math.min(est.porcentaje || 0, 100)}%`,
-                                                    height: '100%',
-                                                    backgroundColor: 'var(--primary, #3b82f6)',
-                                                }}
+                                                className="rf-obra-progress-fill"
+                                                style={{ width: `${Math.min(est.porcentaje || 0, 100)}%` }}
                                             />
                                         </div>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        <span className="rf-obra-pct">
                                             {est.porcentaje !== undefined ? `${est.porcentaje}% del total` : ''}
-                                           
                                         </span>
                                     </div>
                                 ))}
@@ -306,6 +286,132 @@ export default function ResumenFinanciero() {
                     )}
                     <GraficosFinancieros />
                 </>
+            )}
+
+            {/* MODAL: SELECCIÓN DE ELEMENTOS PARA EXPORTAR A PDF */}
+            {modalPDF && (
+                <div
+                    className="rf-modal-overlay"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget && !exportandoPDF) {
+                            setModalPDF(false);
+                        }
+                    }}
+                >
+                    <div className="rf-modal-card" onClick={(e) => e.stopPropagation()}>
+                        {/* Cabecera del modal */}
+                        <div className="rf-modal-header">
+                            <div>
+                                <h3 className="rf-modal-title">
+                                    📥 Exportar Resumen Financiero a PDF
+                                </h3>
+                                <p className="rf-modal-subtitle">
+                                    Elige los elementos y secciones que deseas incluir en el reporte:
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                className="rf-modal-close-btn"
+                                onClick={() => setModalPDF(false)}
+                                disabled={exportandoPDF}
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        {/* Barra de selección rápida */}
+                        <div className="rf-modal-quickbar">
+                            <span className="rf-modal-counter">
+                                {Object.values(seccionesSeleccionadas).filter(Boolean).length} de {OPCIONES_EXPORTACION.length} seleccionados
+                            </span>
+                            <div className="rf-modal-quick-actions">
+                                <button
+                                    type="button"
+                                    className="rf-link-btn"
+                                    onClick={() => seleccionarTodas(true)}
+                                    disabled={exportandoPDF}
+                                >
+                                    Marcar todos
+                                </button>
+                                <span className="rf-quick-divider">|</span>
+                                <button
+                                    type="button"
+                                    className="rf-link-btn muted"
+                                    onClick={() => seleccionarTodas(false)}
+                                    disabled={exportandoPDF}
+                                >
+                                    Desmarcar todos
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Lista de elementos seleccionables */}
+                        <div className="rf-modal-body">
+                            {OPCIONES_EXPORTACION.map((opc) => {
+                                const activo = !!seccionesSeleccionadas[opc.id];
+                                return (
+                                    <div
+                                        key={opc.id}
+                                        onClick={() => !exportandoPDF && toggleSeccion(opc.id)}
+                                        className={`rf-option-card ${activo ? 'activo' : ''} ${exportandoPDF ? 'disabled' : ''}`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            id={`sec_${opc.id}`}
+                                            checked={activo}
+                                            onChange={() => toggleSeccion(opc.id)}
+                                            disabled={exportandoPDF}
+                                            className="rf-option-checkbox"
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <span className="rf-option-icon">
+                                            {opc.icono}
+                                        </span>
+                                        <div className="rf-option-info">
+                                            <div className="rf-option-title">
+                                                {opc.titulo}
+                                            </div>
+                                            <div className="rf-option-desc">
+                                                {opc.descripcion}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {/* Alerta de error */}
+                            {errorPDF && (
+                                <div className="rf-modal-error">
+                                    ⚠️ {errorPDF}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Botones de acción al pie */}
+                        <div className="rf-modal-footer">
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                onClick={() => setModalPDF(false)}
+                                disabled={exportandoPDF}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-primary rf-btn-submit"
+                                onClick={handleExportarPDF}
+                                disabled={exportandoPDF || Object.values(seccionesSeleccionadas).filter(Boolean).length === 0}
+                            >
+                                {exportandoPDF ? (
+                                    <>⏳ Generando PDF...</>
+                                ) : (
+                                    <>📥 Descargar PDF</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </main>
     );
