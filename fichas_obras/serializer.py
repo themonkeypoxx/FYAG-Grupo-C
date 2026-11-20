@@ -71,6 +71,8 @@ class Obras_Serializer(serializers.ModelSerializer):
     tecnicos_asignados = serializers.SerializerMethodField()
     transiciones_posibles = serializers.SerializerMethodField()
     maquinarias_asignadas = serializers.SerializerMethodField()
+    materiales_asignados = serializers.SerializerMethodField()
+    costo_materiales = serializers.SerializerMethodField()
     maquinarias_codigos = serializers.ListField(
         child=serializers.CharField(), required=False, write_only=True
     )
@@ -84,6 +86,25 @@ class Obras_Serializer(serializers.ModelSerializer):
             return obtener_maquinas_por_obra(obj.id_obra)
         except Exception:
             return []
+
+    def get_materiales_asignados(self, obj):
+        return [
+            {
+                "id_asignacion_material": a.id_asignacion_material,
+                "material": a.material_id,
+                "material_codigo": a.material.codigo,
+                "material_nombre": a.material.nombre,
+                "unidad_medida": a.material.unidad_medida,
+                "cantidad": a.cantidad,
+                "precio_unitario": a.precio_unitario,
+                "total_linea": a.total_linea,
+                "observacion": a.observacion,
+            }
+            for a in obj.asignaciones_material.all()
+        ]
+
+    def get_costo_materiales(self, obj):
+        return sum((a.total_linea for a in obj.asignaciones_material.all()), Decimal("0"))
 
     def get_supervisor_nombre(self, obj):
         if not obj.supervisor:
@@ -434,3 +455,47 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['email'] = self.user.email
         data['roles'] = list(self.user.groups.values_list('name', flat=True))
         return data
+
+
+class MaterialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Material
+        fields = [
+            "id_material", "codigo", "nombre", "unidad_medida",
+            "stock_actual", "precio_unitario", "activo",
+        ]
+        read_only_fields = ["id_material"]
+
+    def validate_codigo(self, value):
+        return value.strip().upper()
+
+
+class AsignacionMaterialSerializer(serializers.ModelSerializer):
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
+    material_codigo = serializers.CharField(source="material.codigo", read_only=True)
+    material_nombre = serializers.CharField(source="material.nombre", read_only=True)
+    unidad_medida = serializers.CharField(source="material.unidad_medida", read_only=True)
+    stock_disponible = serializers.DecimalField(
+        source="material.stock_actual", max_digits=12, decimal_places=2, read_only=True
+    )
+    total_linea = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    asignado_por_nombre = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AsignacionMaterial
+        fields = [
+            "id_asignacion_material", "obra", "obra_codigo", "obra_nombre",
+            "material", "material_codigo", "material_nombre", "unidad_medida",
+            "stock_disponible", "cantidad", "precio_unitario", "total_linea",
+            "asignado_por", "asignado_por_nombre", "fecha_asignacion", "observacion",
+        ]
+        read_only_fields = [
+            "id_asignacion_material", "precio_unitario", "asignado_por", "fecha_asignacion",
+        ]
+        extra_kwargs = {"cantidad": {"min_value": Decimal("0.01")}}
+        validators = []
+
+    def get_asignado_por_nombre(self, obj):
+        u = obj.asignado_por
+        return u.get_full_name() or u.username

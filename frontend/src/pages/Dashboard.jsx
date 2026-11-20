@@ -4,6 +4,7 @@ import ClasificacionServicios from '../components/ClasificacionServicios';
 import GraficoDashObras from '../components/GraficoDashObras';
 import ObraCard from '../components/ObraCard';
 import ModalCambiarEstado from '../components/ModalCambiarEstado';
+import ModalMateriales from '../components/ModalMateriales';
 import obrasService from '../Servicios/obrasService';
 
 export default function Dashboard() {
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const [cargandoSolicitudes, setCargandoSolicitudes] = useState(false);
   const [asignacionesExistentes, setAsignacionesExistentes] = useState([]);
   const [catalogoMaquinarias, setCatalogoMaquinarias] = useState([]);
+  const [obraMateriales, setObraMateriales] = useState(null);
 
   useEffect(() => {
     const notificacionRecibida = location.state?.notificacion;
@@ -464,6 +466,7 @@ const bloqueOcupado = (bloque) => {
               onAsignarTecnico={abrirAsignacion}
               onDesasignarTecnico={handleDesasignarTecnico}
               onEditarObra={abrirEdicion}
+              onGestionarMateriales={setObraMateriales}
             />
           ))}
         </div>
@@ -476,6 +479,12 @@ const bloqueOcupado = (bloque) => {
         cargando={cargandoTransicion}
         onClose={() => setModalData({ isOpen: false, obra: null, transicion: null })}
         onConfirmar={handleConfirmarTransicion}
+      />
+      <ModalMateriales
+        isOpen={!!obraMateriales}
+        obra={obraMateriales ? obras.find((o) => o.id_obra === obraMateriales.id_obra) || obraMateriales : null}
+        onClose={() => setObraMateriales(null)}
+        onCambio={cargarObras}
       />
       {obraEditando && (
         <div

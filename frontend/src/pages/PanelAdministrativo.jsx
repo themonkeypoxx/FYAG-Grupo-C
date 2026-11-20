@@ -883,14 +883,6 @@ export default function PanelAdministrativo() {
                     ? 'Pruebe ajustando los filtros de búsqueda.'
                     : 'Aún no se han emitido facturas. Puede crear la primera haciendo clic en "+ Emitir Factura".'}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setModalNuevaFactura(true)}
-                  className="btn-primary"
-                  style={{ marginTop: '0.75rem' }}
-                >
-                  + Emitir Primera Factura
-                </button>
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
@@ -1031,27 +1023,6 @@ export default function PanelAdministrativo() {
                 Acceda a la herramienta especializada de cotización para calcular subtotales, IVA automático (19%) y vincular presupuestos directamente a proyectos u obras activas.
               </p>
             </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/nuevo-presupuesto')}
-              style={{
-                backgroundColor: '#ffffff',
-                color: '#1e40af',
-                border: 'none',
-                fontWeight: 700,
-                fontSize: '1rem',
-                padding: '0.75rem 1.5rem',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              📄 Abrir Formulario de Nuevo Presupuesto &rarr;
-            </button>
           </div>
 
           {/* Tabla de presupuestos registrados */}

@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Cliente, EstadoObra, Obra, TipoServicio
+from .models import Cliente, EstadoObra, Obra, TipoServicio, Material
+
 
 @admin.register(Cliente)
 class ClienteAdmin(admin.ModelAdmin):
@@ -20,6 +21,10 @@ class ObraAdmin(admin.ModelAdmin):
             kwargs["queryset"] = Cliente.objects.filter(soft_deleted=False).order_by("razon_social")
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+@admin.register(Material)
+class MaterialAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre", "unidad_medida", "stock_actual", "precio_unitario", "activo")
+    search_fields = ("codigo", "nombre")
 
 admin.site.register(TipoServicio)
 admin.site.register(EstadoObra)

@@ -394,3 +394,62 @@ class RegistroPago(models.Model):
  
     def __str__(self):
         return f"Pago {self.monto_abonado} -> {self.factura.folio_factura}"
+
+
+# ---------------------------------------------------------------------------
+# Catalogo con stock
+# ---------------------------------------------------------------------------
+class Material(models.Model):
+    id_material = models.AutoField(primary_key=True)
+    codigo = models.CharField(max_length=30, unique=True)
+    nombre = models.CharField(max_length=150)
+    unidad_medida = models.CharField(max_length=30)
+    stock_actual = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2,default=0)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "material"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
+
+# ---------------------------------------------------------------------------
+# Que material va a que obra
+# ---------------------------------------------------------------------------
+class AsignacionMaterial(models.Model):
+    id_asignacion_material = models.AutoField(primary_key=True)
+    obra = models.ForeignKey(
+        Obra, on_delete=models.CASCADE,
+        db_column="id_obra", related_name="asignaciones_material",
+        )
+    material = models.ForeignKey(
+        Material, on_delete=models.PROTECT,
+        db_column="id_material", related_name="asignaciones",
+        )
+    asignado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        db_column="id_asignado_por", related_name="materiales_asignados",
+        )
+    cantidad= models.DecimalField(max_digits=10, decimal_places=2)
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    fecha_asignacion = models.DateTimeField(default=timezone.now)
+    observacion = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "asignacion_material"
+        ordering = ["-fecha_asignacion"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(cantidad__gt=0),
+                name="asignacion_material_cantidad_positiva",
+            ),
+        ]
+
+    @property
+    def total_linea(self):
+        return self.cantidad * self.precio_unitario
+
+    def __str__(self):
+        return f"{self.material.codigo} x {self.cantidad} -> {self.obra.codigo_obra}"

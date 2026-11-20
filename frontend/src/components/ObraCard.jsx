@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import authService from '../Servicios/authService';
 
-export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico, onDesasignarTecnico, onEditarObra }) {
+export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico, onDesasignarTecnico, onEditarObra, onGestionarMateriales }) {
   const transiciones = obra.transiciones_posibles || [];
   const tecnicosAsignados = obra.tecnicos_asignados || [];
   const esTerminal = ['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo);
@@ -150,6 +150,37 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
         </div>
 
         {/* Alerta de motivo en caso de suspensión o cancelación */}
+                {/* Materiales asignados */}
+        <div className="tecnicos-asignados" style={{ marginTop: '0.75rem' }}>
+          <strong>📦 Materiales asignados</strong>
+          {obra.materiales_asignados && obra.materiales_asignados.length > 0 ? (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.4rem' }}>
+                {obra.materiales_asignados.map((m) => (
+                  <span
+                    key={m.id_asignacion_material}
+                    style={{
+                      fontSize: '0.78rem',
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                      color: '#047857',
+                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                    }}
+                    title={`${m.material_codigo} · ${formatearMonto(m.precio_unitario)} por ${m.unidad_medida}`}
+                  >
+                    <strong>{Number(m.cantidad)} {m.unidad_medida}</strong> {m.material_nombre}
+                  </span>
+                ))}
+              </div>
+              <small style={{ display: 'block', marginTop: '0.4rem', color: 'var(--text-muted)' }}>
+                Costo en materiales: {formatearMonto(obra.costo_materiales)}
+              </small>
+            </>
+          ) : (
+            <span className="sin-tecnicos">Sin materiales asignados</span>
+          )}
+        </div>
         {obra.motivo_suspension_cancelacion && (
           <div className="motivo-alerta">
             ⚠️ <strong>Motivo:</strong> {obra.motivo_suspension_cancelacion}
@@ -174,6 +205,11 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
         {onAsignarTecnico && (
           <button type="button" className="btn-primary" onClick={() => onAsignarTecnico(obra)}>
             Asignar técnico
+          </button>
+        )}
+        {onGestionarMateriales && (
+          <button type="button" className="btn-secondary" onClick={() => onGestionarMateriales(obra)}>
+            📦 Materiales
           </button>
         )}
         {!esTerminal && puedePresupuestar && (

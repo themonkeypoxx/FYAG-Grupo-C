@@ -14,7 +14,9 @@ from .serializer import CustomTokenObtainPairSerializer
 
 from .models import (
     AsignacionTecnico, Cliente, EstadoObra, Factura, ItemPresupuesto, Obra,
-    Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio, NotificacionTecnico,
+    Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio, NotificacionTecnico, 
+    AsignacionMaterial, Material
+
 )
 from .permissions import EsGerencial, EsSupervisor, EsAdministrativo, EsTecnico 
 #x alguna razon faltaba el import de los demas grupos y solo estaban EsSupervisor y Gerencial *raro
@@ -30,8 +32,11 @@ from .serializer import (
     RegistroPagoSerializer,
     SolicitudCambioObraSerializer,
     NotificacionTecnicoSerializer,
+    MaterialSerializer,
+    AsignacionMaterialSerializer
 )
 from .services import aplicar_transicion_estado, validar_transicion_estado
+from .services_materiales import asignar_material, actualizar_asignacion, quitar_asignacion
 
 from fyag_mongoDB.mixins import AuditModelViewSetMixin
 from fyag_mongoDB.servicios import registrar_evento
@@ -71,7 +76,8 @@ class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
                     "asignaciones",
                     queryset=AsignacionTecnico.objects.filter(activo=True).select_related("tecnico"),
                     to_attr="asignaciones_activas",
-                )
+                ),
+                "asignaciones_material__material"
             )
             .order_by("-fecha_inicio", "codigo_obra")
         )
@@ -673,3 +679,148 @@ class RegistroPagoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+
+class MaterialViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
+    """Catálogo de materiales. Filtros: ?activo=true|false y ?search=texto"""
+    serializer_class = MaterialSerializer
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [(EsGerencial | EsSupervisor | EsAdministrativo)()]
+        return [(EsGerencial | EsAdministrativo)()]
+
+    def get_queryset(self):
+        queryset = Material.objects.all().order_by("nombre")
+        params = self.request.query_params
+
+        activo = params.get("activo")
+        if activo in ("true", "True", "1"):
+            queryset = queryset.filter(activo=True)
+        elif activo in ("false", "False", "0"):
+            queryset = queryset.filter(activo=False)
+
+        search = params.get("search")
+        if search:
+            queryset = queryset.filter(Q(codigo__icontains=search) | Q(nombre__icontains=search))
+        return queryset
+
+    def perform_destroy(self, instance):
+        # Un material ya usado en obras no se borra: se desactiva para conservar el historial.
+        if instance.asignaciones.exists():
+            instance.activo = False
+            instance.save(update_fields=["activo"])
+            registrar_evento(
+                request=self.request, accion="DESACTIVAR", recurso="Material",
+                recurso_id=instance.pk, detalles={"codigo": instance.codigo},
+            )
+            return
+        super().perform_destroy(instance)
+
+
+class AsignacionMaterialViewSet(viewsets.ModelViewSet):
+    """Entregas de material a obras. Filtro: ?obra=<id_obra>"""
+    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo | EsTecnico]
+    serializer_class = AsignacionMaterialSerializer
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def _puede_gestionar(self):
+        return self.request.user.groups.filter(
+            name__in=[
+                "Supervisor", "SUPERVISOR", "Gerencial", "GERENCIA", "Gerente", "Gerencia",
+                "Administrativo", "ADMINISTRATIVO",
+            ]
+        ).exists()
+
+    def _sin_permiso(self):
+        return Response(
+            {"detail": "No tienes permiso para modificar materiales de obras."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    def get_queryset(self):
+        queryset = AsignacionMaterial.objects.select_related("obra", "material", "asignado_por")
+        if not self._puede_gestionar():
+            queryset = queryset.filter(
+                obra__asignaciones__tecnico=self.request.user,
+                obra__asignaciones__activo=True,
+            ).distinct()
+        obra_id = self.request.query_params.get("obra")
+        if obra_id:
+            queryset = queryset.filter(obra_id=obra_id)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        if not self._puede_gestionar():
+            return self._sin_permiso()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+        asignacion = asignar_material(
+            obra=datos["obra"],
+            material_id=datos["material"].pk,
+            cantidad=datos["cantidad"],
+            usuario=request.user,
+            observacion=datos.get("observacion", ""),
+        )
+        registrar_evento(
+            request=request,
+            accion="ASIGNAR_MATERIAL",
+            recurso="AsignacionMaterial",
+            recurso_id=asignacion.pk,
+            detalles={
+                "obra_id": str(asignacion.obra_id),
+                "material_codigo": asignacion.material.codigo,
+                "cantidad": asignacion.cantidad,
+                "stock_restante": asignacion.material.stock_actual,
+            },
+        )
+        return Response(self.get_serializer(asignacion).data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        if not self._puede_gestionar():
+            return self._sin_permiso()
+        asignacion = self.get_object()
+        if "cantidad" not in request.data and "observacion" not in request.data:
+            return Response(
+                {"detail": "Solo se puede modificar 'cantidad' u 'observacion'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = self.get_serializer(asignacion, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+        cantidad_anterior = asignacion.cantidad
+        asignacion = actualizar_asignacion(
+            asignacion,
+            cantidad=datos.get("cantidad"),
+            observacion=datos.get("observacion"),
+        )
+        registrar_evento(
+            request=request,
+            accion="EDITAR_ASIGNACION_MATERIAL",
+            recurso="AsignacionMaterial",
+            recurso_id=asignacion.pk,
+            detalles={
+                "obra_id": str(asignacion.obra_id),
+                "material_codigo": asignacion.material.codigo,
+                "cantidad_anterior": cantidad_anterior,
+                "cantidad_nueva": asignacion.cantidad,
+            },
+        )
+        return Response(self.get_serializer(asignacion).data)
+
+    def destroy(self, request, *args, **kwargs):
+        if not self._puede_gestionar():
+            return self._sin_permiso()
+        asignacion = self.get_object()
+        obra_id = str(asignacion.obra_id)
+        pk = asignacion.pk
+        datos = quitar_asignacion(asignacion)
+        registrar_evento(
+            request=request,
+            accion="DEVOLVER_MATERIAL",
+            recurso="AsignacionMaterial",
+            recurso_id=pk,
+            detalles={"obra_id": obra_id, **datos},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
