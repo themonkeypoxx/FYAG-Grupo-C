@@ -34,6 +34,8 @@ from .pdf_utils import render_pdf
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def presupuesto_pdf(request, pk):
+    from django.utils import timezone
+
     obj = get_object_or_404(Presupuesto, pk=pk, soft_deleted=False)
     items = obj.items.all()
     subtotal = sum(i.total_linea for i in items)
@@ -42,10 +44,21 @@ def presupuesto_pdf(request, pk):
         "pdf/presupuesto.html",
         {
             "obj": obj,
-            "items": items,
-            "subtotal": subtotal,
-            "monto_iva": obj.monto_iva,
-            "total": obj.monto_total,
+            "items": [
+                {
+                    "descripcion_item": item.descripcion_item,
+                    "unidad_medida": item.unidad_medida,
+                    "cantidad": item.cantidad,
+                    "precio_unitario": _formatear_clp(item.precio_unitario),
+                    "total_linea": _formatear_clp(item.total_linea),
+                }
+                for item in items
+            ],
+            "subtotal": _formatear_clp(subtotal),
+            "monto_iva": _formatear_clp(obj.monto_iva),
+            "total": _formatear_clp(obj.monto_total),
+            "fecha_generacion": timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M"),
+            "usuario": request.user,
         },
         filename=f"presupuesto_{obj.numero_presupuesto}.pdf",
     )
@@ -57,14 +70,23 @@ def presupuesto_pdf(request, pk):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def factura_pdf(request, pk):
+    from django.utils import timezone
+
     obj = get_object_or_404(Factura, pk=pk, soft_deleted=False)
-    pagos = obj.pagos.all().order_by("fecha_pago")
+    pagos = [
+        {"pago": pago, "monto_abonado_formateado": _formatear_clp(pago.monto_abonado)}
+        for pago in obj.pagos.all().order_by("fecha_pago")
+    ]
 
     return render_pdf(
         "pdf/factura.html",
         {
             "obj": obj,
             "pagos": pagos,
+            "monto_total_formateado": _formatear_clp(obj.monto_total),
+            "saldo_pendiente_formateado": _formatear_clp(obj.saldo_pendiente),
+            "fecha_generacion": timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M"),
+            "usuario": request.user,
         },
         filename=f"factura_{obj.folio_factura}.pdf",
     )

@@ -5,18 +5,27 @@
   {% load static %}
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
   <link rel="stylesheet" href="{% static 'css/factura.css' %}">
+  <link rel="stylesheet" href="{% static 'css/resumen_financiero.css' %}">
 </head>
 <body>
 
-  <!-- ENCABEZADO -->
-  <h1>Factura {{ obj.folio_factura }}</h1>
-  <div class="meta">
-    Estado de pago:
-    <span class="badge {% if obj.estado_pago == 'Pagado' %}badge-pagado{% elif obj.estado_pago == 'Pago Parcial' %}badge-parcial{% else %}badge-pendiente{% endif %}">
-      {{ obj.estado_pago }}
-    </span>
+  <!-- CABECERA DEL REPORTE -->
+  <div class="header-box">
+    <table class="header-table">
+      <tr>
+        <td><img src="{% static 'logotipo/fyag_logo.png' %}" alt="FYAG" height="50"></td>
+        <td class="header-title-cell">
+          <h1>FYAG · Factura {{ obj.folio_factura }}</h1>
+          <div class="meta">Presupuesto vinculado: {{ obj.presupuesto.numero_presupuesto }}</div>
+          <div class="meta">Estado de pago: <span class="badge {% if obj.estado_pago == 'Pagado' %}badge-pagado{% elif obj.estado_pago == 'Pago Parcial' %}badge-parcial{% else %}badge-pendiente{% endif %}">{{ obj.estado_pago }}</span></div>
+        </td>
+        <td class="header-meta-cell">
+          <div class="meta"><strong>Fecha de creación:</strong> {{ fecha_generacion }}</div>
+          {% if usuario %}<div class="meta"><strong>Generado por:</strong> {{ usuario.get_full_name|default:usuario.username }}</div>{% endif %}
+        </td>
+      </tr>
+    </table>
   </div>
-  <div class="meta">Presupuesto vinculado: {{ obj.presupuesto.numero_presupuesto }}</div>
 
   <!-- DATOS CLIENTE / FECHAS -->
   <table style="margin-bottom:14px;">
@@ -27,17 +36,19 @@
         <div class="meta">RUT: {{ obj.cliente.rut_empresa }}</div>
         {% if obj.cliente.giro_comercial %}<div class="meta">Giro: {{ obj.cliente.giro_comercial }}</div>{% endif %}
         {% if obj.cliente.direccion_matriz %}<div class="meta">{{ obj.cliente.direccion_matriz }}</div>{% endif %}
-        {% if obj.cliente.ciudad %}<div class="meta">{{ obj.cliente.comuna }}, {{ obj.cliente.ciudad }}</div>{% endif %}
+        {% if obj.cliente.comuna or obj.cliente.ciudad %}
+          <div class="meta">{{ obj.cliente.comuna }}{% if obj.cliente.comuna and obj.cliente.ciudad %}, {% endif %}{{ obj.cliente.ciudad }}</div>
+        {% endif %}
         {% if obj.cliente.contacto_nombre %}<div class="meta">Contacto: {{ obj.cliente.contacto_nombre }}</div>{% endif %}
         {% if obj.cliente.contacto_email %}<div class="meta">Email: {{ obj.cliente.contacto_email }}</div>{% endif %}
       </td>
       <td class="col">
         <h2>Fechas y Montos</h2>
-        <div class="meta">Emisión: <strong>{{ obj.fecha_emision }}</strong></div>
-        <div class="meta">Vencimiento: <strong>{{ obj.fecha_vencimiento }}</strong></div>
-        <div class="meta" style="margin-top:8px;">Monto total facturado: <strong>${{ obj.monto_total }}</strong></div>
+        <div class="meta">Emisión: <strong>{{ obj.fecha_emision|date:"d/m/Y" }}</strong></div>
+        <div class="meta">Vencimiento: <strong>{{ obj.fecha_vencimiento|date:"d/m/Y" }}</strong></div>
+        <div class="meta" style="margin-top:8px;">Monto total facturado: <strong>{{ monto_total_formateado }}</strong></div>
         <div class="meta" style="color:{% if obj.saldo_pendiente > 0 %}#dc2626{% else %}#15803d{% endif %}; font-weight:bold;">
-          Saldo pendiente: ${{ obj.saldo_pendiente }}
+          Saldo pendiente: {{ saldo_pendiente_formateado }}
         </div>
       </td>
     </tr>
@@ -59,11 +70,11 @@
     <tbody>
       {% for pago in pagos %}
       <tr>
-        <td>{{ pago.fecha_pago|date:"d/m/Y H:i" }}</td>
-        <td>{{ pago.metodo_pago }}</td>
-        <td>{{ pago.nro_comprobante|default:"—" }}</td>
-        <td class="right">${{ pago.monto_abonado }}</td>
-        <td>{{ pago.notas|default:"" }}</td>
+        <td>{{ pago.pago.fecha_pago|date:"d/m/Y H:i" }}</td>
+        <td>{{ pago.pago.metodo_pago }}</td>
+        <td>{{ pago.pago.nro_comprobante|default:"—" }}</td>
+        <td class="right">{{ pago.monto_abonado_formateado }}</td>
+        <td>{{ pago.pago.notas|default:"" }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -77,14 +88,14 @@
     <table>
       <tr>
         <td class="label">Total facturado:</td>
-        <td class="amount right">${{ obj.monto_total }}</td>
+        <td class="amount right">{{ monto_total_formateado }}</td>
       </tr>
       <tr>
         <td class="{% if obj.saldo_pendiente > 0 %}saldo-pend{% else %}saldo-ok{% endif %}">
           Saldo pendiente:
         </td>
         <td class="{% if obj.saldo_pendiente > 0 %}saldo-pend{% else %}saldo-ok{% endif %} right">
-          ${{ obj.saldo_pendiente }}
+          {{ saldo_pendiente_formateado }}
         </td>
       </tr>
     </table>

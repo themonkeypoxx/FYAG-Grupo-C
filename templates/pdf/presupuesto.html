@@ -4,23 +4,28 @@
   <meta charset="utf-8">
   {% load static %}
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
-  <link rel="stylesheet" href="{% static 'css/pdf/presupuesto.css' %}">
+  <link rel="stylesheet" href="{% static 'css/presupuesto.css' %}">
+  <link rel="stylesheet" href="{% static 'css/resumen_financiero.css' %}">
 </head>
 <body>
 
-  <!-- ENCABEZADO -->
-  <div class="header">
-    <h1>Presupuesto {{ obj.numero_presupuesto }}</h1>
-    <div class="meta">
-      Estado:
-      <span class="badge {% if obj.estado_presupuesto == 'Aprobado' %}badge-aprobado{% elif obj.estado_presupuesto == 'Rechazado' %}badge-rechazado{% else %}badge-otro{% endif %}">
-        {{ obj.estado_presupuesto }}
-      </span>
-    </div>
-    <div class="meta">Creado por: {{ obj.creador.get_full_name|default:obj.creador.username }}</div>
-    {% if obj.aprobador_gerencia %}
-    <div class="meta">Aprobado por: {{ obj.aprobador_gerencia.get_full_name|default:obj.aprobador_gerencia.username }}</div>
-    {% endif %}
+  <!-- CABECERA DEL REPORTE -->
+  <div class="header-box">
+    <table class="header-table">
+      <tr>
+        <td><img src="{% static 'logotipo/fyag_logo.png' %}" alt="FYAG" height="50"></td>
+        <td class="header-title-cell">
+          <h1>FYAG · Presupuesto {{ obj.numero_presupuesto }}</h1>
+          <div class="meta">Estado: <span class="badge {% if obj.estado_presupuesto == 'Aprobado' %}badge-aprobado{% elif obj.estado_presupuesto == 'Rechazado' %}badge-rechazado{% else %}badge-otro{% endif %}">{{ obj.estado_presupuesto }}</span></div>
+          <div class="meta">Creado por: {{ obj.creador.get_full_name|default:obj.creador.username }}</div>
+          {% if obj.aprobador_gerencia %}<div class="meta">Aprobado por: {{ obj.aprobador_gerencia.get_full_name|default:obj.aprobador_gerencia.username }}</div>{% endif %}
+        </td>
+        <td class="header-meta-cell">
+          <div class="meta"><strong>Fecha de creación:</strong> {{ fecha_generacion }}</div>
+          {% if usuario %}<div class="meta"><strong>Generado por:</strong> {{ usuario.get_full_name|default:usuario.username }}</div>{% endif %}
+        </td>
+      </tr>
+    </table>
   </div>
 
   <!-- DATOS CLIENTE / OBRA -->
@@ -40,8 +45,8 @@
         <h2>Proyecto / Obra</h2>
         <div class="meta"><strong>{{ obj.obra.codigo_obra }}</strong> — {{ obj.obra.nombre_obra }}</div>
         <div class="meta">Ubicación: {{ obj.obra.ubicacion_faena }}</div>
-        <div class="meta">Inicio: {{ obj.obra.fecha_inicio }}</div>
-        {% if obj.obra.fecha_termino_estimada %}<div class="meta">Término estimado: {{ obj.obra.fecha_termino_estimada }}</div>{% endif %}
+        <div class="meta">Inicio: {{ obj.obra.fecha_inicio|date:"d/m/Y" }}</div>
+        {% if obj.obra.fecha_termino_estimada %}<div class="meta">Término estimado: {{ obj.obra.fecha_termino_estimada|date:"d/m/Y" }}</div>{% endif %}
         <div class="meta">Estado obra: {{ obj.obra.estado_obra.descripcion }}</div>
       </td>
     </tr>
@@ -66,8 +71,8 @@
         <td>{{ item.descripcion_item }}</td>
         <td>{{ item.unidad_medida }}</td>
         <td class="right">{{ item.cantidad }}</td>
-        <td class="right">${{ item.precio_unitario }}</td>
-        <td class="right">${{ item.total_linea }}</td>
+        <td class="right">{{ item.precio_unitario }}</td>
+        <td class="right">{{ item.total_linea }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -81,15 +86,15 @@
     <table>
       <tr>
         <td class="label">Subtotal (neto):</td>
-        <td class="amount right">${{ subtotal }}</td>
+        <td class="amount right">{{ subtotal }}</td>
       </tr>
       <tr>
         <td class="label">IVA (19%):</td>
-        <td class="amount right">${{ monto_iva }}</td>
+        <td class="amount right">{{ monto_iva }}</td>
       </tr>
       <tr>
         <td class="grand">TOTAL:</td>
-        <td class="grand right">${{ total }}</td>
+        <td class="grand right">{{ total }}</td>
       </tr>
     </table>
   </div>
