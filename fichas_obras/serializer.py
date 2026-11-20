@@ -6,7 +6,10 @@ from .models import *
 from .validators import validar_rut
 from .services import obtener_transiciones_posibles, validar_transicion_estado
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
+from django.contrib.auth import get_user_model, password_validation
+from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from fyag_mongoDB.servicio_maquinarias import obtener_maquinas_por_obra
 
 # Serializador de Tipos de Servicio (Mantención, Climatización, Proyecto eléctrico, Emergencia, Garantía, Proyecto)
@@ -499,3 +502,76 @@ class AsignacionMaterialSerializer(serializers.ModelSerializer):
     def get_asignado_por_nombre(self, obj):
         u = obj.asignado_por
         return u.get_full_name() or u.username
+
+
+# ── Gestión de usuarios (solo Gerencia) ──────────────────────────
+UserModel = get_user_model()
+
+ROLES_USUARIO = [
+    ("GERENCIA", "Gerencia"),
+    ("ADMINISTRATIVO", "Administrativo"),
+    ("SUPERVISOR", "Supervisor"),
+    ("TECNICO", "Técnico"),
+]
+
+
+class UsuarioSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(max_length=150)
+    rol = serializers.ChoiceField(choices=ROLES_USUARIO, write_only=True)
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    roles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserModel
+        fields = [
+            "id", "username", "email", "first_name", "last_name",
+            "rol", "roles", "password", "is_active", "date_joined",
+        ]
+        read_only_fields = ["id", "is_active", "date_joined"]
+        extra_kwargs = {
+            "email": {"required": True},
+            "first_name": {"required": True},
+            "last_name": {"required": True},
+        }
+
+    def get_roles(self, obj):
+        return [g.name for g in obj.groups.all()]
+
+    def validate_username(self, value):
+        value = value.strip()
+        if " " in value:
+            raise serializers.ValidationError("El nombre de usuario no puede tener espacios.")
+        if UserModel.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Ya existe un usuario con ese nombre de usuario.")
+        return value
+
+    def validate_email(self, value):
+        value = value.strip()
+        if UserModel.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Ya existe un usuario con ese correo.")
+        return value
+
+    def validate(self, attrs):
+        usuario_temporal = UserModel(
+            username=attrs.get("username", ""),
+            email=attrs.get("email", ""),
+            first_name=attrs.get("first_name", ""),
+            last_name=attrs.get("last_name", ""),
+        )
+        try:
+            password_validation.validate_password(attrs["password"], user=usuario_temporal)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({"password": list(e.messages)})
+        return attrs
+
+    def create(self, validated_data):
+        rol = validated_data.pop("rol")
+        password = validated_data.pop("password")
+        with transaction.atomic():
+            user = UserModel(**validated_data)
+            user.set_password(password)
+            user.is_staff = False  # no se da acceso al admin de Django
+            user.save()
+            grupo, _ = Group.objects.get_or_create(name=rol)
+            user.groups.add(grupo)
+        return user

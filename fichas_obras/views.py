@@ -8,6 +8,9 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from rest_framework import mixins
+from .serializer import UsuarioSerializer, UserModel
+
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializer import CustomTokenObtainPairSerializer
@@ -824,3 +827,12 @@ class AsignacionMaterialViewSet(viewsets.ModelViewSet):
             detalles={"obra_id": obra_id, **datos},
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UsuarioViewSet(AuditModelViewSetMixin, mixins.ListModelMixin,
+                     mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Listar y crear usuarios. Solo el rol Gerencia puede usarlo."""
+    permission_classes = [EsGerencial]
+    serializer_class = UsuarioSerializer
+    recurso_nombre = "Usuario"
+    queryset = UserModel.objects.prefetch_related("groups").order_by("-date_joined")

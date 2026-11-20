@@ -8,6 +8,7 @@ import NuevoPresupuesto from './pages/NuevoPresupuesto';
 import VistaTecnico from './pages/Vista-tecnico';
 import PanelAdministrativo from './pages/PanelAdministrativo';
 import ResumenFinanciero from './pages/ResumenFinanciero';
+import GestionUsuarios from './pages/GestionUsuarios';
 import AccesoDenegado from './pages/AccesoDenegado';
 import RutaProtegida from './Servicios/RutaProtegida';
 import './App.css';
@@ -102,6 +103,14 @@ function Layout() {
           element={
             <RutaProtegida roles={['Gerencial', 'Administrativo']}>
               <NuevoPresupuesto />
+            </RutaProtegida>
+          }
+        />
+                <Route
+          path="/usuarios"
+          element={
+            <RutaProtegida roles={['Gerencial']}>
+              <GestionUsuarios />
             </RutaProtegida>
           }
         />

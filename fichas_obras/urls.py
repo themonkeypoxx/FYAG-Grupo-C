@@ -24,6 +24,7 @@ router.register("facturas", FacturaViewSet, basename="factura")
 router.register("pagos", RegistroPagoViewSet, basename="registro-pago")
 router.register("materiales", MaterialViewSet, basename="material")
 router.register("asignaciones-material", AsignacionMaterialViewSet, basename="asignacion-material")
+router.register("usuarios", UsuarioViewSet, basename="usuario")
 
 
 
