@@ -22,7 +22,7 @@ from django.urls import path
 # es para usar el custom token obtain en lugar del q viene x defecto en drf!!!!
 from fichas_obras.views import CustomTokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
-from fyag_mongoDB.views import MaquinariaCatalogView, AsignarMaquinariaView
+from fyag_mongoDB.views import (MaquinariaCatalogView,AsignarMaquinariaView,DashboardMongoAgregacionView,)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,5 +32,7 @@ urlpatterns = [
     path('api/maquinarias/asignar/', AsignarMaquinariaView.as_view(), name='asignar-maquinaria'),
     path('obras/fyag/v1/maquinarias/', MaquinariaCatalogView.as_view(), name='catalogo-maquinarias-v1'),
     path('obras/', include('fichas_obras.urls')),
+    path('obras/fyag/v1/dashboard/mongo-agregacion/', DashboardMongoAgregacionView.as_view(), name='dashboard-mongo-agregacion'),
+    
 ]
 #

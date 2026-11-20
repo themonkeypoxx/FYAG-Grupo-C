@@ -2,9 +2,9 @@
 
 from django.urls import path, include
 from rest_framework import routers
-
+from .financial_views import ( ResumenFinancieroView,KPIsDashboardView,AgregacionFacturacionView,AgregacionMorosidadView,)
 from .views import *
-from .financial_views import ResumenFinancieroView, KPIsDashboardView
+
 
 
 # Versionado de API
@@ -35,5 +35,15 @@ urlpatterns = [
         KPIsDashboardView.as_view(),
         name="kpis-dashboard"
     ),
-    path("fyag/v1/", include(router.urls))
+    path("fyag/v1/", include(router.urls)),
+    path(
+        "fyag/v1/agregaciones/facturacion/",
+        AgregacionFacturacionView.as_view(),
+        name="agregacion-facturacion"
+    ),
+    path(
+        "fyag/v1/agregaciones/morosidad/",
+        AgregacionMorosidadView.as_view(),
+        name="agregacion-morosidad"
+    ),
 ]
