@@ -12,7 +12,7 @@ maquinarias_collection = audit_db['maquinarias']
 NOMBRE_COLECCION = 'logs_auditoria'
 audit_logs_collection = audit_db[NOMBRE_COLECCION]
 
-_coleccion_inicializada = False
+coleccion_inicializada = False
 
 def asegurar_coleccion_timeseries():
     global _coleccion_inicializada
@@ -27,7 +27,6 @@ def asegurar_coleccion_timeseries():
                     'metaField': 'metadata',      
                     'granularity': 'seconds',     
                 },
-                # tiempo de retencion de 100 días
                 expireAfterSeconds=100 * 24 * 60 * 60
             )
         _coleccion_inicializada = True
