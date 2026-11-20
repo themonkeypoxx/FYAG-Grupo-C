@@ -12,8 +12,10 @@ from .resumen_financiero import (
     calcular_porcentaje_morosidad,
     calcular_saldo_estimado_por_cobrar,
     obtener_kpis_completos,
+    obtener_agregacion_facturacion_mensual,
+    obtener_agregacion_morosidad_clientes,
+    obtener_agregacion_presupuesto_vs_real,
 )
-
 
 class ResumenFinancieroView(APIView):
     """
@@ -49,3 +51,20 @@ class KPIsDashboardView(APIView):
 
     def get(self, request):
         return Response(obtener_kpis_completos())
+
+
+class AgregacionFacturacionView(APIView):
+    permission_classes = [EsGerencial | EsAdministrativo]
+    def get(self, request):
+        return Response({
+            "evolucion_mensual": obtener_agregacion_facturacion_mensual(),
+            "presupuesto_vs_real": obtener_agregacion_presupuesto_vs_real(),
+        })
+
+class AgregacionMorosidadView(APIView):
+    permission_classes = [EsGerencial | EsAdministrativo]
+    def get(self, request):
+        return Response({
+            "top_clientes_morosos": obtener_agregacion_morosidad_clientes(),
+            "resumen": obtener_kpis_completos()["morosidad"],
+        })

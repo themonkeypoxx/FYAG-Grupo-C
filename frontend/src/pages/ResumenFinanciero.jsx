@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { obtenerResumenFinanciero } from '../Servicios/resumenFinancieroService';
 import obrasService from '../Servicios/obrasService';
+import GraficosFinancieros from '../components/GraficosFinancieros';
 
 
 const formatearCLP = (monto) => {
@@ -296,12 +297,14 @@ export default function ResumenFinanciero() {
                                         </div>
                                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                             {est.porcentaje !== undefined ? `${est.porcentaje}% del total` : ''}
+                                           
                                         </span>
                                     </div>
                                 ))}
                             </div>
                         </section>
                     )}
+                    <GraficosFinancieros />
                 </>
             )}
         </main>

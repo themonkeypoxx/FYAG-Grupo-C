@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.db.models import Count, Sum
 from django.utils import timezone
-
+from django.db.models.functions import TruncMonth
 from .models import EstadoObra, Factura, Obra, RegistroPago
 
 
@@ -235,3 +235,83 @@ def obtener_kpis_completos():
             "clientes_morosos_cantidad": calcular_clientes_morosos(),
         },
     }
+def obtener_agregacion_facturacion_mensual():
+    """
+    Agrupa facturación emitida vs saldo pendiente por mes de emisión.
+    """
+    datos = (
+        Factura.objects.filter(soft_deleted=False)
+        .annotate(mes=TruncMonth("fecha_emision"))
+        .values("mes")
+        .annotate(
+            total_facturado=Sum("monto_total"),
+            saldo_pendiente=Sum("saldo_pendiente"),
+            cantidad_facturas=Count("id_factura"),
+        )
+        .order_by("mes")
+    )
+    resultado = []
+    for fila in datos:
+        facturado = fila["total_facturado"] or Decimal("0.00")
+        pendiente = fila["saldo_pendiente"] or Decimal("0.00")
+        cobrado = max(facturado - pendiente, Decimal("0.00"))
+        resultado.append({
+            "mes": fila["mes"].strftime("%Y-%m") if fila["mes"] else "Sin fecha",
+            "facturado": float(facturado),
+            "cobrado": float(cobrado),
+            "pendiente": float(pendiente),
+            "cantidad_facturas": fila["cantidad_facturas"],
+        })
+    return resultado
+
+def obtener_agregacion_morosidad_clientes():
+    """
+    Top clientes con deuda vencida y facturas pendientes para gráfico de morosidad.
+    """
+    hoy = timezone.localdate()
+    morosos = (
+        Factura.objects.filter(
+            soft_deleted=False,
+            saldo_pendiente__gt=0,
+            fecha_vencimiento__lt=hoy,
+        )
+        .values("cliente__razon_social", "cliente__rut_empresa")
+        .annotate(
+            deuda_vencida=Sum("saldo_pendiente"),
+            facturas_vencidas=Count("id_factura"),
+        )
+        .order_by("-deuda_vencida")[:8]
+    )
+    return [
+        {
+            "cliente": m["cliente__razon_social"],
+            "rut": m["cliente__rut_empresa"],
+            "deuda_vencida": float(m["deuda_vencida"] or Decimal("0.00")),
+            "facturas_vencidas": m["facturas_vencidas"],
+        }
+        for m in morosos
+    ]
+
+def obtener_agregacion_presupuesto_vs_real():
+    """
+    Compara costo estimado vs costo real por tipo de servicio.
+    """
+    servicios = (
+        Obra.objects.filter(soft_deleted=False)
+        .values("tipo_servicio__nombre_servicio")
+        .annotate(
+            cantidad=Count("id_obra"),
+            estimado=Sum("costo_estimado"),
+            real=Sum("costo_real"),
+        )
+        .order_by("-estimado")
+    )
+    return [
+        {
+            "servicio": s["tipo_servicio__nombre_servicio"],
+            "cantidad": s["cantidad"],
+            "costo_estimado": float(s["estimado"] or Decimal("0.00")),
+            "costo_real": float(s["real"] or Decimal("0.00")),
+        }
+        for s in servicios
+    ]

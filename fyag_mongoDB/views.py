@@ -37,3 +37,10 @@ class AsignarMaquinariaView(APIView):
         )
 
         return Response({"mensaje": f"Máquina {codigo} asignada exitosamente a la obra."})
+    
+from .servicios import registrar_evento, obtener_agregacion_dashboard_mongo
+
+class DashboardMongoAgregacionView(APIView):
+    def get(self, request):
+        datos = obtener_agregacion_dashboard_mongo()
+        return Response(datos)
