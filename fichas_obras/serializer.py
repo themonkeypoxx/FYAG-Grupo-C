@@ -158,6 +158,7 @@ class AsignacionTecnicoSerializer(serializers.ModelSerializer):
     obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
     obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
     ubicacion_faena = serializers.CharField(source="obra.ubicacion_faena", read_only=True)
+    especificaciones_lugar = serializers.CharField(source="obra.especificaciones_lugar", read_only=True)
     tipo_servicio_codigo = serializers.CharField(source="obra.tipo_servicio.codigo", read_only=True)
     tipo_servicio_nombre = serializers.CharField(source="obra.tipo_servicio.nombre_servicio", read_only=True)
     estado_obra_codigo = serializers.CharField(source="obra.estado_obra.codigo_estado", read_only=True)
@@ -169,7 +170,7 @@ class AsignacionTecnicoSerializer(serializers.ModelSerializer):
         fields = [
             "id_asignacion", "obra", "tecnico", "fecha", "hora_inicio", "hora_termino",
             "activo", "fecha_asignacion", "obra_nombre", "obra_codigo",
-            "ubicacion_faena", "tipo_servicio_codigo", "tipo_servicio_nombre",
+            "ubicacion_faena", "especificaciones_lugar", "tipo_servicio_codigo", "tipo_servicio_nombre",
             "estado_obra_codigo", "estado_obra_descripcion", "tecnico_nombre",
         ]
         read_only_fields = ["id_asignacion", "fecha_asignacion"]

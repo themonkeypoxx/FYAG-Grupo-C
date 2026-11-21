@@ -1,6 +1,7 @@
+
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import authService from '../Servicios/authService';
+import authService from '../Servicios/AuthService';
 
 export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico, onDesasignarTecnico, onEditarObra, onGestionarMateriales }) {
   const transiciones = obra.transiciones_posibles || [];
@@ -8,11 +9,11 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
   const esTerminal = ['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo);
   const puedePresupuestar = authService.tieneRol('Gerencial', 'Supervisor', 'Administrativo');
 
-  // Formato para técnicos asignados
+
   const formatear = (a) =>
     `${a.fecha} · ${a.hora_inicio?.slice(0, 5)}–${a.hora_termino?.slice(0, 5)}`;
 
-  // Agrupación por técnico
+  
   const resumenPorTecnico = useMemo(() => {
     const grupos = {};
     tecnicosAsignados.forEach((a) => {
@@ -88,6 +89,15 @@ export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico
             </div>
           )}
         </div>
+
+        {obra.especificaciones_lugar && (
+          <div className="detail-item">
+            <span>📝</span>
+            <span style={{ whiteSpace: 'pre-line' }}>
+              Especificaciones del lugar: {obra.especificaciones_lugar}
+            </span>
+          </div>
+        )}
 
         {/* Técnicos asignados */}
         <div className="tecnicos-asignados">

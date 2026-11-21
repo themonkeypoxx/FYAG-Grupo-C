@@ -185,7 +185,20 @@ export default function VistaTecnico() {
           />
           <strong>{obra.hora_inicio.slice(0, 5)}–{obra.hora_termino.slice(0, 5)}</strong>
           <div className="horario-card-title">{obra.obra_codigo} · {obra.obra_nombre}</div>
-          <small>{obra.ubicacion_faena}</small>
+                    <small>{obra.ubicacion_faena}</small>
+
+          {obra.especificaciones_lugar && (
+            <small
+              style={{
+                display: 'block',
+                marginTop: '.4rem',
+                whiteSpace: 'pre-line',
+              }}
+            >
+              <strong>Detalles del lugar:</strong> {obra.especificaciones_lugar}
+            </small>
+          )}
+
           {!['FINALIZADA', 'CANCELADA'].includes(obra.estado_obra_codigo) && (
             <button type="button" className="btn-secondary" onClick={() => abrirSolicitud(obra)} style={{ marginTop: '.6rem', fontSize: '.8rem' }}>
               Solicitar cambio de estado
