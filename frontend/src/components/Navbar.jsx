@@ -78,6 +78,14 @@ export default function Navbar() {
               + Presupuesto
             </Link>
           )}
+                    {esGerencial && (
+            <Link
+              to="/usuarios"
+              className={`nav-link ${location.pathname === '/usuarios' ? 'active' : ''}`}
+            >
+              Usuarios
+            </Link>
+          )}
 
           {(esGerencial || esSupervisor) && (
             <Link to="/nueva-obra" className="btn-primary">

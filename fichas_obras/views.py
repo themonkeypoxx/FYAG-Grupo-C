@@ -8,13 +8,18 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from rest_framework import mixins
+from .serializer import UsuarioSerializer, UserModel
+
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializer import CustomTokenObtainPairSerializer
 
 from .models import (
     AsignacionTecnico, Cliente, EstadoObra, Factura, ItemPresupuesto, Obra,
-    Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio,
+    Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio, NotificacionTecnico, 
+    AsignacionMaterial, Material
+
 )
 from .permissions import EsGerencial, EsSupervisor, EsAdministrativo, EsTecnico 
 #x alguna razon faltaba el import de los demas grupos y solo estaban EsSupervisor y Gerencial *raro
@@ -29,11 +34,36 @@ from .serializer import (
     PresupuestoSerializer,
     RegistroPagoSerializer,
     SolicitudCambioObraSerializer,
+    NotificacionTecnicoSerializer,
+    MaterialSerializer,
+    AsignacionMaterialSerializer
 )
 from .services import aplicar_transicion_estado, validar_transicion_estado
+from .services_materiales import asignar_material, actualizar_asignacion, quitar_asignacion
 
-class Crud_obras(viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo]
+from fyag_mongoDB.mixins import AuditModelViewSetMixin
+from fyag_mongoDB.servicios import registrar_evento
+from fyag_mongoDB.servicio_maquinarias import (
+    asignar_maquina_a_obra,
+    liberar_maquina,
+    obtener_maquinas_por_obra,
+)
+
+
+def notificar_tecnicos_de_obra(obra, estado_codigo):
+    """Guarda un aviso para cada técnico con asignaciones activas en la obra."""
+    if estado_codigo not in {"CANCELADA", "SUSPENDIDA", "FINALIZADA"}:
+        return
+    tecnico_ids = AsignacionTecnico.objects.filter(
+        obra=obra, activo=True
+    ).values_list("tecnico_id", flat=True).distinct()
+    NotificacionTecnico.objects.bulk_create([
+        NotificacionTecnico(tecnico_id=tecnico_id, obra=obra, estado_codigo=estado_codigo)
+        for tecnico_id in tecnico_ids
+    ])
+
+class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
+    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo | EsTecnico]
     """
     CRUD principal de Obras con clasificación por tipo de servicio,
     búsqueda, filtros y máquina de estados operativos.
@@ -49,7 +79,8 @@ class Crud_obras(viewsets.ModelViewSet):
                     "asignaciones",
                     queryset=AsignacionTecnico.objects.filter(activo=True).select_related("tecnico"),
                     to_attr="asignaciones_activas",
-                )
+                ),
+                "asignaciones_material__material"
             )
             .order_by("-fecha_inicio", "codigo_obra")
         )
@@ -98,16 +129,34 @@ class Crud_obras(viewsets.ModelViewSet):
 
         return queryset
 
+    def perform_create(self, serializer):
+        codigos_maquinas = serializer.validated_data.pop('maquinarias_codigos', [])
+        super().perform_create(serializer)
+        obra = serializer.instance
+        for codigo in codigos_maquinas:
+            try:
+                asignar_maquina_a_obra(codigo, obra.id_obra)
+            except Exception:
+                pass
+
+    def perform_update(self, serializer):
+        codigos_nuevos = serializer.validated_data.pop('maquinarias_codigos', None)
+        super().perform_update(serializer)
+        obra = serializer.instance
+        if codigos_nuevos is not None:
+            try:
+                maquinas_anteriores = obtener_maquinas_por_obra(obra.id_obra)
+                for m in maquinas_anteriores:
+                    codigo_ant = m.get('codigo')
+                    if codigo_ant and codigo_ant not in codigos_nuevos:
+                        liberar_maquina(codigo_ant)
+                for codigo in codigos_nuevos:
+                    asignar_maquina_a_obra(codigo, obra.id_obra)
+            except Exception:
+                pass
+
     @action(detail=True, methods=["post"], url_path="cambiar-estado")
     def cambiar_estado(self, request, pk=None):
-        """
-        Ejecuta la transición del estado operativo de una obra según la máquina de estados.
-        Payload esperado:
-        {
-            "nuevo_estado": "EJECUCION" (código de estado) o id numérico,
-            "motivo": "Explicación en caso de SUSPENDIDA o CANCELADA"
-        }
-        """
         obra = self.get_object()
         nuevo_estado_val = request.data.get("nuevo_estado")
         motivo = request.data.get("motivo")
@@ -117,6 +166,12 @@ class Crud_obras(viewsets.ModelViewSet):
                 {"error": "Debe especificar el campo 'nuevo_estado' (código o ID)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        es_tecnico = request.user.groups.filter(name__in=["Tecnico", "TECNICO", "Técnico"]).exists()
+        if es_tecnico and (obra.estado_obra.codigo_estado != "PENDIENTE"
+                or str(nuevo_estado_val).strip().upper() != "EJECUCION"
+                or not AsignacionTecnico.objects.filter(obra=obra, tecnico=request.user).exists()):
+            return Response({"error": "Solo puedes iniciar una obra pendiente que tengas asignada."}, status=status.HTTP_403_FORBIDDEN)
 
         # Resolver si pasaron código o ID numérico
         if str(nuevo_estado_val).isdigit():
@@ -131,12 +186,29 @@ class Crud_obras(viewsets.ModelViewSet):
         else:
             codigo_destino = str(nuevo_estado_val).strip().upper()
 
+        estado_anterior = obra.estado_obra.codigo_estado
+
         try:
             obra_actualizada = aplicar_transicion_estado(
                 obra=obra,
                 nuevo_codigo=codigo_destino,
                 motivo=motivo
             )
+            notificar_tecnicos_de_obra(obra, codigo_destino)
+
+            registrar_evento(
+                request=request,
+                accion="CAMBIO_ESTADO",
+                recurso="Obra",
+                recurso_id=obra_actualizada.id_obra,
+                detalles={
+                    "codigo_obra": obra_actualizada.codigo_obra,
+                    "estado_anterior": estado_anterior,
+                    "estado_nuevo": codigo_destino,
+                    "motivo": motivo,
+                },
+            )
+
             serializer = self.get_serializer(obra_actualizada)
             return Response(
                 {
@@ -183,31 +255,10 @@ class Crud_obras(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="resumen-estados")
     def resumen_estados(self, request):
         """
-        Retorna la cantidad de obras agrupadas por estado operativo.
+        Retorna la cantidad y porcentaje de obras agrupadas por estado operativo.
         """
-        estados = EstadoObra.objects.all().order_by("id_estado_obra")
-        conteo_por_estado = dict(
-            Obra.objects.values("estado_obra_id")
-            .annotate(total=Count("id_obra"))
-            .values_list("estado_obra_id", "total")
-        )
-
-        resultado = []
-        total_obras = 0
-        for est in estados:
-            cant = conteo_por_estado.get(est.id_estado_obra, 0)
-            total_obras += cant
-            resultado.append({
-                "id_estado_obra": est.id_estado_obra,
-                "codigo_estado": est.codigo_estado,
-                "descripcion": est.descripcion,
-                "cantidad_obras": cant,
-            })
-
-        return Response({
-            "total_obras": total_obras,
-            "estados": resultado,
-        })
+        from .resumen_financiero import calcular_obras_por_estado
+        return Response(calcular_obras_por_estado())
 
 
 class TipoServicioViewSet(viewsets.ReadOnlyModelViewSet):
@@ -254,6 +305,7 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
         return self.request.user.groups.filter(
             name__in=["Supervisor", "SUPERVISOR", "Gerencial", "GERENCIA", "Gerente", "Gerencia"]
         ).exists()
+
 
     def create(self, request, *args, **kwargs):
         if not self._puede_gestionar_asignaciones():
@@ -362,6 +414,19 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
                 {"detail": "El técnico no tiene asignaciones activas en esta obra."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        registrar_evento(
+            request=request,
+            accion="DESASIGNAR_TECNICO",
+            recurso="AsignacionTecnico",
+            recurso_id=obra_id,
+            detalles={
+                "obra_id": obra_id,
+                "tecnico_id": tecnico_id,
+                "asignaciones_desactivadas": cantidad,
+            },
+        )
+
         return Response({"mensaje": "Técnico desasignado de la obra.", "asignaciones_desactivadas": cantidad})
 
     @action(detail=False, methods=["get"], url_path="tecnicos")
@@ -369,7 +434,23 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         tecnicos = User.objects.filter(groups__name__in=["Tecnico", "TECNICO", "Técnico"], is_active=True).distinct().order_by("first_name", "last_name", "username")
-        return Response([{"id": user.pk, "username": user.username, "nombre": user.get_full_name() or user.username} for user in tecnicos])
+        return Response([
+            {
+                "id": user.pk,
+                "username": user.username,
+                "nombre": user.get_full_name() or user.username,
+                "email": user.email,
+            }
+            for user in tecnicos
+        ])
+
+
+class NotificacionTecnicoViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [EsTecnico]
+    serializer_class = NotificacionTecnicoSerializer
+
+    def get_queryset(self):
+        return NotificacionTecnico.objects.filter(tecnico=self.request.user).select_related("obra", "obra__estado_obra")
 
 
 class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
@@ -438,6 +519,7 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
                 }[solicitud.tipo]
                 obra = Obra.objects.select_for_update().select_related("estado_obra").get(pk=solicitud.obra_id)
                 aplicar_transicion_estado(obra, codigo_estado, motivo=solicitud.motivo)
+                notificar_tecnicos_de_obra(obra, codigo_estado)
                 solicitud.estado = SolicitudCambioObra.EstadoSolicitud.APROBADA
             else:
                 solicitud.estado = SolicitudCambioObra.EstadoSolicitud.RECHAZADA
@@ -449,10 +531,23 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
                 "estado", "respuesta_supervisor", "supervisor_respuesta", "respondida_en"
             ])
 
+        registrar_evento(
+            request=request,
+            accion=f"SOLICITUD_{accion}",
+            recurso="SolicitudCambioObra",
+            recurso_id=solicitud.id_solicitud,
+            detalles={
+                "obra_id": solicitud.obra_id,
+                "tipo_solicitud": solicitud.tipo,
+                "resolucion": accion,
+                "respuesta_supervisor": respuesta,
+            },
+        )
+
         return Response(self.get_serializer(solicitud).data)
 
 
-class PresupuestoViewSet(viewsets.ModelViewSet):
+class PresupuestoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = PresupuestoSerializer
 
@@ -490,7 +585,7 @@ class ItemPresupuestoViewSet(viewsets.ModelViewSet):
     queryset = ItemPresupuesto.objects.select_related("presupuesto").all()
 
 
-class FacturaViewSet(viewsets.ModelViewSet):
+class FacturaViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = FacturaSerializer
     queryset = Factura.objects.select_related("presupuesto", "cliente").filter(soft_deleted=False).order_by("-fecha_emision")
@@ -524,6 +619,18 @@ class FacturaViewSet(viewsets.ModelViewSet):
                 factura.saldo_pendiente = nuevo_saldo
                 factura.estado_pago = Factura.EstadoPago.PAGADO if nuevo_saldo == Decimal("0.00") else Factura.EstadoPago.PAGO_PARCIAL
                 factura.save()
+
+                registrar_evento(
+                    request=request,
+                    accion="REGISTRO_PAGO",
+                    recurso="Factura",
+                    recurso_id=factura.id_factura,
+                    detalles={
+                        "monto_abono": str(abono),
+                        "nuevo_saldo": str(factura.saldo_pendiente),
+                        "estado_pago": factura.estado_pago,
+                    },
+                )
             except Exception as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         elif nuevo_estado:
@@ -536,6 +643,17 @@ class FacturaViewSet(viewsets.ModelViewSet):
             elif nuevo_estado == Factura.EstadoPago.PENDIENTE:
                 factura.saldo_pendiente = factura.monto_total
             factura.save()
+
+            registrar_evento(
+                request=request,
+                accion="CAMBIO_ESTADO_PAGO",
+                recurso="Factura",
+                recurso_id=factura.id_factura,
+                detalles={
+                    "estado_pago": factura.estado_pago,
+                    "saldo_pendiente": str(factura.saldo_pendiente),
+                },
+            )
         else:
             return Response({"error": "Debe especificar 'estado_pago' o 'monto_abono'."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -545,7 +663,7 @@ class FacturaViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
-class RegistroPagoViewSet(viewsets.ModelViewSet):
+class RegistroPagoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = RegistroPagoSerializer
     queryset = RegistroPago.objects.select_related("factura", "registrador").order_by("-fecha_pago")
@@ -564,3 +682,157 @@ class RegistroPagoViewSet(viewsets.ModelViewSet):
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+
+class MaterialViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
+    """Catálogo de materiales. Filtros: ?activo=true|false y ?search=texto"""
+    serializer_class = MaterialSerializer
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [(EsGerencial | EsSupervisor | EsAdministrativo)()]
+        return [(EsGerencial | EsAdministrativo)()]
+
+    def get_queryset(self):
+        queryset = Material.objects.all().order_by("nombre")
+        params = self.request.query_params
+
+        activo = params.get("activo")
+        if activo in ("true", "True", "1"):
+            queryset = queryset.filter(activo=True)
+        elif activo in ("false", "False", "0"):
+            queryset = queryset.filter(activo=False)
+
+        search = params.get("search")
+        if search:
+            queryset = queryset.filter(Q(codigo__icontains=search) | Q(nombre__icontains=search))
+        return queryset
+
+    def perform_destroy(self, instance):
+        # Un material ya usado en obras no se borra: se desactiva para conservar el historial.
+        if instance.asignaciones.exists():
+            instance.activo = False
+            instance.save(update_fields=["activo"])
+            registrar_evento(
+                request=self.request, accion="DESACTIVAR", recurso="Material",
+                recurso_id=instance.pk, detalles={"codigo": instance.codigo},
+            )
+            return
+        super().perform_destroy(instance)
+
+
+class AsignacionMaterialViewSet(viewsets.ModelViewSet):
+    """Entregas de material a obras. Filtro: ?obra=<id_obra>"""
+    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo | EsTecnico]
+    serializer_class = AsignacionMaterialSerializer
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def _puede_gestionar(self):
+        return self.request.user.groups.filter(
+            name__in=[
+                "Supervisor", "SUPERVISOR", "Gerencial", "GERENCIA", "Gerente", "Gerencia",
+                "Administrativo", "ADMINISTRATIVO",
+            ]
+        ).exists()
+
+    def _sin_permiso(self):
+        return Response(
+            {"detail": "No tienes permiso para modificar materiales de obras."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    def get_queryset(self):
+        queryset = AsignacionMaterial.objects.select_related("obra", "material", "asignado_por")
+        if not self._puede_gestionar():
+            queryset = queryset.filter(
+                obra__asignaciones__tecnico=self.request.user,
+                obra__asignaciones__activo=True,
+            ).distinct()
+        obra_id = self.request.query_params.get("obra")
+        if obra_id:
+            queryset = queryset.filter(obra_id=obra_id)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        if not self._puede_gestionar():
+            return self._sin_permiso()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+        asignacion = asignar_material(
+            obra=datos["obra"],
+            material_id=datos["material"].pk,
+            cantidad=datos["cantidad"],
+            usuario=request.user,
+            observacion=datos.get("observacion", ""),
+        )
+        registrar_evento(
+            request=request,
+            accion="ASIGNAR_MATERIAL",
+            recurso="AsignacionMaterial",
+            recurso_id=asignacion.pk,
+            detalles={
+                "obra_id": str(asignacion.obra_id),
+                "material_codigo": asignacion.material.codigo,
+                "cantidad": asignacion.cantidad,
+                "stock_restante": asignacion.material.stock_actual,
+            },
+        )
+        return Response(self.get_serializer(asignacion).data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        if not self._puede_gestionar():
+            return self._sin_permiso()
+        asignacion = self.get_object()
+        if "cantidad" not in request.data and "observacion" not in request.data:
+            return Response(
+                {"detail": "Solo se puede modificar 'cantidad' u 'observacion'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = self.get_serializer(asignacion, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+        cantidad_anterior = asignacion.cantidad
+        asignacion = actualizar_asignacion(
+            asignacion,
+            cantidad=datos.get("cantidad"),
+            observacion=datos.get("observacion"),
+        )
+        registrar_evento(
+            request=request,
+            accion="EDITAR_ASIGNACION_MATERIAL",
+            recurso="AsignacionMaterial",
+            recurso_id=asignacion.pk,
+            detalles={
+                "obra_id": str(asignacion.obra_id),
+                "material_codigo": asignacion.material.codigo,
+                "cantidad_anterior": cantidad_anterior,
+                "cantidad_nueva": asignacion.cantidad,
+            },
+        )
+        return Response(self.get_serializer(asignacion).data)
+
+    def destroy(self, request, *args, **kwargs):
+        if not self._puede_gestionar():
+            return self._sin_permiso()
+        asignacion = self.get_object()
+        obra_id = str(asignacion.obra_id)
+        pk = asignacion.pk
+        datos = quitar_asignacion(asignacion)
+        registrar_evento(
+            request=request,
+            accion="DEVOLVER_MATERIAL",
+            recurso="AsignacionMaterial",
+            recurso_id=pk,
+            detalles={"obra_id": obra_id, **datos},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UsuarioViewSet(AuditModelViewSetMixin, mixins.ListModelMixin,
+                     mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Listar y crear usuarios. Solo el rol Gerencia puede usarlo."""
+    permission_classes = [EsGerencial]
+    serializer_class = UsuarioSerializer
+    recurso_nombre = "Usuario"
+    queryset = UserModel.objects.prefetch_related("groups").order_by("-date_joined")

@@ -90,6 +90,11 @@ export const obrasService = {
     return response.data;
   },
 
+  async getNotificacionesTecnico() {
+    const response = await api.get('/obras/fyag/v1/notificaciones-tecnico/');
+    return response.data;
+  },
+
   async getSolicitudesCambio() {
     const response = await api.get('/obras/fyag/v1/solicitudes-cambio-obra/');
     return response.data;
@@ -106,6 +111,53 @@ export const obrasService = {
       respuesta,
     });
     return response.data;
+  },
+
+
+  async getMaquinarias() {
+    const response = await api.get('/obras/fyag/v1/maquinarias/');
+    return response.data;
+  },
+
+  async asignarMaquinaria(codigoMaquina, obraId) {
+    const response = await api.post('/api/maquinarias/asignar/', {
+      codigo_maquina: codigoMaquina,
+      obra_id: obraId,
+    });
+    return response.data;
+  },
+    //  Materiales (catálogo con stock) y asignación a obras ──
+  async getMateriales(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.activo !== undefined) params.append('activo', filters.activo);
+    if (filters.search) params.append('search', filters.search);
+    const response = await api.get(`/obras/fyag/v1/materiales/?${params.toString()}`);
+    return response.data;
+  },
+
+  async getMaterialesDeObra(obraId) {
+    const response = await api.get(`/obras/fyag/v1/asignaciones-material/?obra=${obraId}`);
+    return response.data;
+  },
+
+  async asignarMaterial({ obra, material, cantidad, observacion = '' }) {
+    const response = await api.post('/obras/fyag/v1/asignaciones-material/', {
+      obra,
+      material,
+      cantidad,
+      observacion,
+    });
+    return response.data;
+  },
+
+  async actualizarAsignacionMaterial(asignacionId, datos) {
+    const response = await api.patch(`/obras/fyag/v1/asignaciones-material/${asignacionId}/`, datos);
+    return response.data;
+  },
+
+  
+  async quitarMaterial(asignacionId) {
+    await api.delete(`/obras/fyag/v1/asignaciones-material/${asignacionId}/`);
   },
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../Servicios/api';
 
@@ -23,6 +23,15 @@ export default function PanelAdministrativo() {
   const location = useLocation();
   const [notificacion, setNotificacion] = useState(null);
   const [pestanaActiva, setPestanaActiva] = useState('clientes'); // 'clientes' | 'facturas' | 'presupuestos'
+
+  // -------------------------------------------------------------
+  // ESTADOS: Modal PDF
+  // -------------------------------------------------------------
+  const [modalPDF, setModalPDF] = useState(false);
+  const [tipoPDF, setTipoPDF] = useState('presupuesto'); // 'presupuesto' | 'factura'
+  const [itemPDFSeleccionado, setItemPDFSeleccionado] = useState('');
+  const [exportandoPDF, setExportandoPDF] = useState(false);
+  const [errorPDF, setErrorPDF] = useState(null);
 
   // -------------------------------------------------------------
   // ESTADOS: Clientes
@@ -87,6 +96,48 @@ export default function PanelAdministrativo() {
   // -------------------------------------------------------------
   const [presupuestos, setPresupuestos] = useState([]);
   const [cargandoPresupuestos, setCargandoPresupuestos] = useState(false);
+
+  // -------------------------------------------------------------
+  // HANDLER: Exportar PDF
+  // -------------------------------------------------------------
+  const handleExportarPDF = async () => {
+    if (!itemPDFSeleccionado) {
+      setErrorPDF('Debes seleccionar un elemento para exportar.');
+      return;
+    }
+    setExportandoPDF(true);
+    setErrorPDF(null);
+    try {
+      const endpoint =
+        tipoPDF === 'presupuesto'
+          ? `/obras/fyag/v1/presupuestos/${itemPDFSeleccionado}/pdf/`
+          : `/obras/fyag/v1/facturas/${itemPDFSeleccionado}/pdf/`;
+
+      const response = await api.get(endpoint, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      const nombre =
+        tipoPDF === 'presupuesto'
+          ? presupuestos.find((p) => p.id_presupuesto === itemPDFSeleccionado)?.numero_presupuesto || itemPDFSeleccionado
+          : facturas.find((f) => f.id_factura === itemPDFSeleccionado)?.folio_factura || itemPDFSeleccionado;
+      link.setAttribute('download', `${tipoPDF}_${nombre}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setModalPDF(false);
+      setItemPDFSeleccionado('');
+    } catch (err) {
+      setErrorPDF(
+        err.response?.status === 404
+          ? 'No se encontró el elemento seleccionado.'
+          : 'Error al generar el PDF. Intente de nuevo.'
+      );
+    } finally {
+      setExportandoPDF(false);
+    }
+  };
 
   // -------------------------------------------------------------
   // EFECTOS DE CARGA
@@ -352,19 +403,42 @@ export default function PanelAdministrativo() {
         </div>
 
         {/* BOTÓN REQUERIDO: Registrar Presupuesto (lleva a la vista existente) */}
-        <button
-          type="button"
-          onClick={() => navigate('/nuevo-presupuesto')}
-          className="btn-primary"
-          style={{
-            fontSize: '1rem',
-            padding: '0.75rem 1.4rem',
-            boxShadow: '0 4px 6px -1px rgba(30, 64, 175, 0.25)',
-            cursor: 'pointer',
-          }}
-        >
-          📄 + Registrar Presupuesto
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setTipoPDF('presupuesto');
+              setItemPDFSeleccionado('');
+              setErrorPDF(null);
+              setModalPDF(true);
+            }}
+            className="btn-secondary"
+            style={{
+              fontSize: '1rem',
+              padding: '0.75rem 1.4rem',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+            }}
+          >
+            📥 Exportar a PDF
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/nuevo-presupuesto')}
+            className="btn-primary"
+            style={{
+              fontSize: '1rem',
+              padding: '0.75rem 1.4rem',
+              boxShadow: '0 4px 6px -1px rgba(30, 64, 175, 0.25)',
+              cursor: 'pointer',
+            }}
+          >
+            📄 + Registrar Presupuesto
+          </button>
+        </div>
       </div>
 
       {notificacion && (
@@ -809,14 +883,6 @@ export default function PanelAdministrativo() {
                     ? 'Pruebe ajustando los filtros de búsqueda.'
                     : 'Aún no se han emitido facturas. Puede crear la primera haciendo clic en "+ Emitir Factura".'}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setModalNuevaFactura(true)}
-                  className="btn-primary"
-                  style={{ marginTop: '0.75rem' }}
-                >
-                  + Emitir Primera Factura
-                </button>
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
@@ -957,27 +1023,6 @@ export default function PanelAdministrativo() {
                 Acceda a la herramienta especializada de cotización para calcular subtotales, IVA automático (19%) y vincular presupuestos directamente a proyectos u obras activas.
               </p>
             </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/nuevo-presupuesto')}
-              style={{
-                backgroundColor: '#ffffff',
-                color: '#1e40af',
-                border: 'none',
-                fontWeight: 700,
-                fontSize: '1rem',
-                padding: '0.75rem 1.5rem',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              📄 Abrir Formulario de Nuevo Presupuesto &rarr;
-            </button>
           </div>
 
           {/* Tabla de presupuestos registrados */}
@@ -1388,6 +1433,162 @@ export default function PanelAdministrativo() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL: EXPORTAR A PDF                                         */}
+      {/* ============================================================= */}
+      {modalPDF && (
+        <div
+          className="modal-overlay"
+          onClick={() => setModalPDF(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1050,
+            padding: '1rem',
+          }}
+        >
+          <div
+            className="modal-content"
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '1.75rem',
+              border: '1px solid var(--border)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Cabecera */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                📥 Exportar a PDF
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalPDF(false)}
+                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Selector de tipo */}
+            <div className="form-group">
+              <label>¿Qué desea exportar?</label>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                {[
+                  { valor: 'presupuesto', etiqueta: '📄 Presupuesto' },
+                  { valor: 'factura',     etiqueta: '🧾 Factura' },
+                ].map(({ valor, etiqueta }) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    onClick={() => { setTipoPDF(valor); setItemPDFSeleccionado(''); setErrorPDF(null); }}
+                    style={{
+                      flex: 1,
+                      padding: '0.6rem',
+                      borderRadius: '8px',
+                      border: tipoPDF === valor ? '2px solid var(--primary)' : '2px solid var(--border)',
+                      backgroundColor: tipoPDF === valor ? '#eff6ff' : 'transparent',
+                      color: tipoPDF === valor ? 'var(--primary)' : 'var(--text-muted)',
+                      fontWeight: tipoPDF === valor ? 700 : 500,
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {etiqueta}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Selector de elemento */}
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label htmlFor="pdf_item_select">
+                {tipoPDF === 'presupuesto' ? 'Seleccionar presupuesto' : 'Seleccionar factura'}
+              </label>
+              <select
+                id="pdf_item_select"
+                className="form-control"
+                value={itemPDFSeleccionado}
+                onChange={(e) => { setItemPDFSeleccionado(e.target.value); setErrorPDF(null); }}
+                style={{ marginTop: '0.4rem' }}
+              >
+                <option value="">— Seleccione —</option>
+                {tipoPDF === 'presupuesto'
+                  ? presupuestos.map((p) => (
+                      <option key={p.id_presupuesto} value={p.id_presupuesto}>
+                        {p.numero_presupuesto} — {p.cliente_razon_social} ({formatearCLP(p.monto_total)})
+                      </option>
+                    ))
+                  : facturas.map((f) => (
+                      <option key={f.id_factura} value={f.id_factura}>
+                        {f.folio_factura} — {f.cliente_razon_social} · {f.estado_pago}
+                      </option>
+                    ))}
+              </select>
+            </div>
+
+            {/* Vista previa rápida del ítem seleccionado */}
+            {itemPDFSeleccionado && tipoPDF === 'presupuesto' && (() => {
+              const p = presupuestos.find((x) => x.id_presupuesto === itemPDFSeleccionado);
+              return p ? (
+                <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                  <div><strong>{p.numero_presupuesto}</strong> · {p.estado_presupuesto}</div>
+                  <div style={{ color: 'var(--text-muted)' }}>{p.obra_codigo} — {p.obra_nombre}</div>
+                  <div style={{ fontWeight: 700, marginTop: '0.25rem' }}>Total: {formatearCLP(p.monto_total)}</div>
+                </div>
+              ) : null;
+            })()}
+
+            {itemPDFSeleccionado && tipoPDF === 'factura' && (() => {
+              const f = facturas.find((x) => x.id_factura === itemPDFSeleccionado);
+              return f ? (
+                <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                  <div><strong>{f.folio_factura}</strong></div>
+                  <div style={{ color: 'var(--text-muted)' }}>{f.cliente_razon_social} · {f.numero_presupuesto}</div>
+                  <div>Total: {formatearCLP(f.monto_total)} · Saldo: {formatearCLP(f.saldo_pendiente)}</div>
+                  <div style={{ fontWeight: 700, color: f.estado_pago === 'Pagado' ? '#16a34a' : '#dc2626', marginTop: '0.25rem' }}>{f.estado_pago}</div>
+                </div>
+              ) : null;
+            })()}
+
+            {/* Error */}
+            {errorPDF && (
+              <div style={{ marginTop: '0.75rem', padding: '0.65rem', borderRadius: '6px', fontSize: '0.875rem', backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                {errorPDF}
+              </div>
+            )}
+
+            {/* Botones */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setModalPDF(false)}
+                className="btn-secondary"
+                disabled={exportandoPDF}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExportarPDF}
+                className="btn-primary"
+                disabled={exportandoPDF || !itemPDFSeleccionado}
+              >
+                {exportandoPDF ? 'Generando PDF...' : '📥 Descargar PDF'}
+              </button>
+            </div>
           </div>
         </div>
       )}

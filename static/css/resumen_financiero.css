@@ -1,0 +1,148 @@
+@page {
+  size: a4 portrait;
+  margin: 1.8cm 1.8cm 2cm 1.8cm;
+  @frame footer_frame {
+    -pdf-frame-content: footer_content;
+    left: 1.8cm; width: 17.4cm; top: 27.5cm; height: 1cm;
+  }
+}
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 10px;
+  color: #1e293b;
+  line-height: 1.4;
+}
+h1 {
+  color: #1a3c6e;
+  font-size: 18px;
+  margin: 0 0 4px 0;
+  font-weight: bold;
+}
+h2 {
+  color: #1a3c6e;
+  font-size: 11px;
+  margin: 14px 0 6px 0;
+  padding-bottom: 3px;
+  border-bottom: 1.5px solid #1a3c6e;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.header-box {
+  margin-bottom: 12px;
+  border-bottom: 2px solid #1a3c6e;
+  padding-bottom: 8px;
+}
+.header-table {
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
+}
+.header-title-cell {
+  border: none;
+  padding: 0;
+  vertical-align: top;
+}
+.header-meta-cell {
+  border: none;
+  padding: 0;
+  text-align: right;
+  vertical-align: top;
+}
+.meta {
+  font-size: 9px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Tablas principales */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  margin-bottom: 12px;
+}
+th {
+  background-color: #1a3c6e;
+  color: #ffffff;
+  font-weight: bold;
+  text-align: left;
+  padding: 5px 6px;
+  font-size: 8.5px;
+}
+td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 5px 6px;
+  font-size: 8.5px;
+}
+tr:nth-child(even) td {
+  background: #f8fafc;
+}
+.right {
+  text-align: right;
+}
+.center {
+  text-align: center;
+}
+.bold {
+  font-weight: bold;
+}
+
+/* Utilidades de color */
+.text-success { color: #15803d; }
+.text-warning { color: #b45309; }
+.text-danger { color: #b91c1c; }
+.text-muted { color: #888888; font-style: italic; }
+
+/* KPI Layout en formato tabla para compatibilidad xhtml2pdf */
+.kpi-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  margin-bottom: 10px;
+}
+.kpi-card {
+  border: 1px solid #cbd5e1;
+  background-color: #f8fafc;
+  padding: 6px 8px;
+  width: 33.33%;
+  vertical-align: top;
+}
+.kpi-title {
+  font-size: 8px;
+  color: #475569;
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.kpi-value {
+  font-size: 13px;
+  font-weight: bold;
+  color: #0f172a;
+  margin-bottom: 2px;
+}
+.kpi-desc {
+  font-size: 7.5px;
+  color: #64748b;
+}
+
+/* Badges de estado */
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: bold;
+}
+.badge-pagado { background: #dcfce7; color: #15803d; }
+.badge-parcial { background: #fef3c7; color: #b45309; }
+.badge-pendiente { background: #fee2e2; color: #b91c1c; }
+.badge-info { background: #e0e7ff; color: #3730a3; }
+
+#footer_content {
+  text-align: right;
+  font-size: 8px;
+  color: #888;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 4px;
+}

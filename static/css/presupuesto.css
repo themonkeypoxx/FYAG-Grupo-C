@@ -1,0 +1,9 @@
+/* ===== presupuesto.css — solo lo propio del presupuesto (cargar después de base.css) ===== */
+.header { display: block; margin-bottom: 18px; }
+
+.badge-aprobado  { background: #dcfce7; color: #15803d; }
+.badge-rechazado { background: #fee2e2; color: #b91c1c; }
+.badge-otro      { background: #eff6ff; color: #1d4ed8; }
+
+.totals-box .grand { font-size: 13px; font-weight: bold; color: #1a3c6e;
+                     border-top: 2px solid #1a3c6e; }

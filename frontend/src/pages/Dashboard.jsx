@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ClasificacionServicios from '../components/ClasificacionServicios';
+import GraficoDashObras from '../components/GraficoDashObras';
 import ObraCard from '../components/ObraCard';
 import ModalCambiarEstado from '../components/ModalCambiarEstado';
+import ModalMateriales from '../components/ModalMateriales';
 import obrasService from '../Servicios/obrasService';
 
 export default function Dashboard() {
@@ -33,6 +35,8 @@ export default function Dashboard() {
   const [errorSolicitudes, setErrorSolicitudes] = useState('');
   const [cargandoSolicitudes, setCargandoSolicitudes] = useState(false);
   const [asignacionesExistentes, setAsignacionesExistentes] = useState([]);
+  const [catalogoMaquinarias, setCatalogoMaquinarias] = useState([]);
+  const [obraMateriales, setObraMateriales] = useState(null);
 
   useEffect(() => {
     const notificacionRecibida = location.state?.notificacion;
@@ -152,7 +156,7 @@ export default function Dashboard() {
     }
   };
 
-  const abrirEdicion = (obra) => {
+  const abrirEdicion = async (obra) => {
     setObraEditando(obra);
     setEditForm({
       nombre_obra: obra.nombre_obra || '',
@@ -160,7 +164,14 @@ export default function Dashboard() {
       fecha_inicio: obra.fecha_inicio || '',
       fecha_termino_estimada: obra.fecha_termino_estimada || '',
       costo_estimado: obra.costo_estimado ?? '',
+      maquinarias_codigos: (obra.maquinarias_asignadas || []).map((m) => m.codigo),
     });
+    try {
+      const maqs = await obrasService.getMaquinarias();
+      setCatalogoMaquinarias(maqs || []);
+    } catch (err) {
+      console.warn('No se pudo cargar catálogo de maquinarias:', err);
+    }
   };
 
   const guardarEdicion = async (event) => {
@@ -170,6 +181,7 @@ export default function Dashboard() {
         ...editForm,
         costo_estimado: Number(editForm.costo_estimado) || 0,
         fecha_termino_estimada: editForm.fecha_termino_estimada || null,
+        maquinarias_codigos: editForm.maquinarias_codigos || [],
       });
       setObraEditando(null);
       setNotificacion({ tipo: 'exito', mensaje: 'Detalles de la obra actualizados.' });
@@ -348,6 +360,16 @@ const bloqueOcupado = (bloque) => {
         totalObras={totalObras}
       />
 
+      <section className="solicitudes-panel" aria-label="Obras por estado operativo">
+        <div className="solicitudes-panel-header">
+          <div>
+            <h2>Obras por estado operativo</h2>
+            <p>Cantidad de obras pendientes, en ejecución, suspendidas, finalizadas y canceladas.</p>
+          </div>
+        </div>
+        <GraficoDashObras />
+      </section>
+
       <div className="filters-row">
         <div className="search-box">
           <input
@@ -444,6 +466,7 @@ const bloqueOcupado = (bloque) => {
               onAsignarTecnico={abrirAsignacion}
               onDesasignarTecnico={handleDesasignarTecnico}
               onEditarObra={abrirEdicion}
+              onGestionarMateriales={setObraMateriales}
             />
           ))}
         </div>
@@ -456,6 +479,12 @@ const bloqueOcupado = (bloque) => {
         cargando={cargandoTransicion}
         onClose={() => setModalData({ isOpen: false, obra: null, transicion: null })}
         onConfirmar={handleConfirmarTransicion}
+      />
+      <ModalMateriales
+        isOpen={!!obraMateriales}
+        obra={obraMateriales ? obras.find((o) => o.id_obra === obraMateriales.id_obra) || obraMateriales : null}
+        onClose={() => setObraMateriales(null)}
+        onCambio={cargarObras}
       />
       {obraEditando && (
         <div
@@ -540,6 +569,59 @@ const bloqueOcupado = (bloque) => {
                 style={{ display: 'block', width: '100%', padding: '.6rem' }}
               />
             </label>
+
+            {/* Selector de Maquinarias en Edición (MongoDB) */}
+            <div>
+              <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '.4rem' }}>
+                🚜 Maquinarias asignadas (MongoDB)
+              </label>
+              {catalogoMaquinarias.length === 0 ? (
+                <p style={{ margin: 0, fontSize: '.85rem', color: 'var(--text-muted)' }}>
+                  No hay maquinarias registradas en el catálogo.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '.4rem', maxHeight: '180px', overflowY: 'auto', padding: '.5rem', background: 'var(--surface-muted, #f8fafc)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                  {catalogoMaquinarias.map((maq) => {
+                    const codigosActuales = editForm.maquinarias_codigos || [];
+                    const seleccionada = codigosActuales.includes(maq.codigo);
+                    const ocupadaPorOtra = maq.estado === 'ASIGNADA' && maq.obra_id && String(maq.obra_id) !== String(obraEditando.id_obra);
+
+                    return (
+                      <label
+                        key={maq.codigo}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '.5rem',
+                          fontSize: '.85rem',
+                          padding: '.35rem .5rem',
+                          borderRadius: '4px',
+                          background: seleccionada ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                          cursor: ocupadaPorOtra ? 'not-allowed' : 'pointer',
+                          opacity: ocupadaPorOtra ? 0.5 : 1,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={ocupadaPorOtra}
+                          checked={seleccionada}
+                          onChange={(e) => {
+                            const nuevos = e.target.checked
+                              ? [...codigosActuales, maq.codigo]
+                              : codigosActuales.filter((c) => c !== maq.codigo);
+                            setEditForm({ ...editForm, maquinarias_codigos: nuevos });
+                          }}
+                        />
+                        <span>
+                          <strong>{maq.codigo}:</strong> {maq.nombre}
+                          {ocupadaPorOtra && <small style={{ color: '#ef4444', marginLeft: '.4rem' }}>(Asignada a otra obra)</small>}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}>
               <button

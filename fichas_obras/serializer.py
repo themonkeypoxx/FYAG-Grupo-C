@@ -6,6 +6,11 @@ from .models import *
 from .validators import validar_rut
 from .services import obtener_transiciones_posibles, validar_transicion_estado
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model, password_validation
+from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
+from fyag_mongoDB.servicio_maquinarias import obtener_maquinas_por_obra
 
 # Serializador de Tipos de Servicio (Mantención, Climatización, Proyecto eléctrico, Emergencia, Garantía, Proyecto)
 class TipoServ_Serializer(serializers.ModelSerializer):
@@ -68,10 +73,41 @@ class Obras_Serializer(serializers.ModelSerializer):
     supervisor_nombre = serializers.SerializerMethodField()
     tecnicos_asignados = serializers.SerializerMethodField()
     transiciones_posibles = serializers.SerializerMethodField()
+    maquinarias_asignadas = serializers.SerializerMethodField()
+    materiales_asignados = serializers.SerializerMethodField()
+    costo_materiales = serializers.SerializerMethodField()
+    maquinarias_codigos = serializers.ListField(
+        child=serializers.CharField(), required=False, write_only=True
+    )
 
     class Meta:
         model = Obra
         fields = '__all__'
+
+    def get_maquinarias_asignadas(self, obj):
+        try:
+            return obtener_maquinas_por_obra(obj.id_obra)
+        except Exception:
+            return []
+
+    def get_materiales_asignados(self, obj):
+        return [
+            {
+                "id_asignacion_material": a.id_asignacion_material,
+                "material": a.material_id,
+                "material_codigo": a.material.codigo,
+                "material_nombre": a.material.nombre,
+                "unidad_medida": a.material.unidad_medida,
+                "cantidad": a.cantidad,
+                "precio_unitario": a.precio_unitario,
+                "total_linea": a.total_linea,
+                "observacion": a.observacion,
+            }
+            for a in obj.asignaciones_material.all()
+        ]
+
+    def get_costo_materiales(self, obj):
+        return sum((a.total_linea for a in obj.asignaciones_material.all()), Decimal("0"))
 
     def get_supervisor_nombre(self, obj):
         if not obj.supervisor:
@@ -89,9 +125,9 @@ class Obras_Serializer(serializers.ModelSerializer):
                 "id_asignacion": asignacion.id_asignacion,
                 "tecnico": asignacion.tecnico_id,
                 "tecnico_nombre": asignacion.tecnico.get_full_name() or asignacion.tecnico.username,
-                "fecha": asignacion.fecha,
-                "hora_inicio": asignacion.hora_inicio,
-                "hora_termino": asignacion.hora_termino,
+                "fecha": str(asignacion.fecha) if asignacion.fecha else None,
+                "hora_inicio": str(asignacion.hora_inicio)[:5] if asignacion.hora_inicio else None,
+                "hora_termino": str(asignacion.hora_termino)[:5] if asignacion.hora_termino else None,
             }
             for asignacion in asignaciones
         ]
@@ -142,6 +178,7 @@ class AsignacionTecnicoSerializer(serializers.ModelSerializer):
     def get_tecnico_nombre(self, obj):
         return obj.tecnico.get_full_name() or obj.tecnico.username
 
+
     def validate(self, attrs):
         tecnico = attrs.get("tecnico", getattr(self.instance, "tecnico", None))
         fecha = attrs.get("fecha", getattr(self.instance, "fecha", None))
@@ -170,6 +207,16 @@ class AsignacionTecnicoSerializer(serializers.ModelSerializer):
             if conflictos.exists():
                 raise serializers.ValidationError({"horario": "El técnico ya tiene una obra asignada en ese horario."})
         return attrs
+
+
+class NotificacionTecnicoSerializer(serializers.ModelSerializer):
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
+    estado_descripcion = serializers.CharField(source="obra.estado_obra.descripcion", read_only=True)
+
+    class Meta:
+        model = NotificacionTecnico
+        fields = ["id", "obra", "obra_codigo", "obra_nombre", "estado_codigo", "estado_descripcion", "creada_en", "leida"]
 
 
 class SolicitudCambioObraSerializer(serializers.ModelSerializer):
@@ -412,3 +459,120 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['email'] = self.user.email
         data['roles'] = list(self.user.groups.values_list('name', flat=True))
         return data
+
+
+class MaterialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Material
+        fields = [
+            "id_material", "codigo", "nombre", "unidad_medida",
+            "stock_actual", "precio_unitario", "activo",
+        ]
+        read_only_fields = ["id_material"]
+
+    def validate_codigo(self, value):
+        return value.strip().upper()
+
+
+class AsignacionMaterialSerializer(serializers.ModelSerializer):
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
+    material_codigo = serializers.CharField(source="material.codigo", read_only=True)
+    material_nombre = serializers.CharField(source="material.nombre", read_only=True)
+    unidad_medida = serializers.CharField(source="material.unidad_medida", read_only=True)
+    stock_disponible = serializers.DecimalField(
+        source="material.stock_actual", max_digits=12, decimal_places=2, read_only=True
+    )
+    total_linea = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    asignado_por_nombre = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AsignacionMaterial
+        fields = [
+            "id_asignacion_material", "obra", "obra_codigo", "obra_nombre",
+            "material", "material_codigo", "material_nombre", "unidad_medida",
+            "stock_disponible", "cantidad", "precio_unitario", "total_linea",
+            "asignado_por", "asignado_por_nombre", "fecha_asignacion", "observacion",
+        ]
+        read_only_fields = [
+            "id_asignacion_material", "precio_unitario", "asignado_por", "fecha_asignacion",
+        ]
+        extra_kwargs = {"cantidad": {"min_value": Decimal("0.01")}}
+        validators = []
+
+    def get_asignado_por_nombre(self, obj):
+        u = obj.asignado_por
+        return u.get_full_name() or u.username
+
+
+# ── Gestión de usuarios (solo Gerencia) ──────────────────────────
+UserModel = get_user_model()
+
+ROLES_USUARIO = [
+    ("GERENCIA", "Gerencia"),
+    ("ADMINISTRATIVO", "Administrativo"),
+    ("SUPERVISOR", "Supervisor"),
+    ("TECNICO", "Técnico"),
+]
+
+
+class UsuarioSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(max_length=150)
+    rol = serializers.ChoiceField(choices=ROLES_USUARIO, write_only=True)
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    roles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserModel
+        fields = [
+            "id", "username", "email", "first_name", "last_name",
+            "rol", "roles", "password", "is_active", "date_joined",
+        ]
+        read_only_fields = ["id", "is_active", "date_joined"]
+        extra_kwargs = {
+            "email": {"required": True},
+            "first_name": {"required": True},
+            "last_name": {"required": True},
+        }
+
+    def get_roles(self, obj):
+        return [g.name for g in obj.groups.all()]
+
+    def validate_username(self, value):
+        value = value.strip()
+        if " " in value:
+            raise serializers.ValidationError("El nombre de usuario no puede tener espacios.")
+        if UserModel.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Ya existe un usuario con ese nombre de usuario.")
+        return value
+
+    def validate_email(self, value):
+        value = value.strip()
+        if UserModel.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Ya existe un usuario con ese correo.")
+        return value
+
+    def validate(self, attrs):
+        usuario_temporal = UserModel(
+            username=attrs.get("username", ""),
+            email=attrs.get("email", ""),
+            first_name=attrs.get("first_name", ""),
+            last_name=attrs.get("last_name", ""),
+        )
+        try:
+            password_validation.validate_password(attrs["password"], user=usuario_temporal)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({"password": list(e.messages)})
+        return attrs
+
+    def create(self, validated_data):
+        rol = validated_data.pop("rol")
+        password = validated_data.pop("password")
+        with transaction.atomic():
+            user = UserModel(**validated_data)
+            user.set_password(password)
+            user.is_staff = False  # no se da acceso al admin de Django
+            user.save()
+            grupo, _ = Group.objects.get_or_create(name=rol)
+            user.groups.add(grupo)
+        return user

@@ -33,10 +33,12 @@ export const authService = {
         window.location.href = '/login';
     },
     getUsuario() {
-        const data = localStorage.getItem('user_data');
-        // JSON.parse convierte el string de vuelta a objeto
-        // Si no hay datos, retorna null (usuario no logueado)
-        return data ? JSON.parse(data) : null;
+        try {
+            const data = localStorage.getItem('user_data');
+            return data ? JSON.parse(data) : null;
+        } catch {
+            return null;
+        }
     },
     // Verifica si el usuario tiene AL MENOS UNO de los roles requeridos
     // Ejemplo: tieneRol('Gerencial', 'Supervisor')
