@@ -1,7 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import obrasService from '../Servicios/obrasService';
-
 
 export default function NuevaObra() {
   const navigate = useNavigate();
@@ -17,6 +17,7 @@ export default function NuevaObra() {
     codigo_obra: `FYAG-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
     nombre_obra: '',
     ubicacion_faena: '',
+    especificaciones_lugar: '',
     id_cliente: '',
     id_tipo_servicio: '',
     id_estado_obra: '',
@@ -34,18 +35,33 @@ export default function NuevaObra() {
           obrasService.getTiposServicio(),
           obrasService.getEstadosObra(),
         ]);
+
         setClientes(cls);
         setTiposServicio(tipos);
         setEstados(ests);
 
-        // Preseleccionar valores por defecto si existen
-        const pendiente = ests.find((e) => e.codigo_estado === 'PENDIENTE') || ests[0];
+        const primerCliente = cls[0];
+
+        const ubicacionInicial = primerCliente
+          ? [
+              primerCliente.direccion_matriz,
+              primerCliente.comuna,
+              primerCliente.ciudad,
+            ].filter(Boolean).join(', ')
+          : '';
+
+        const pendiente = ests.find(
+          (e) => e.codigo_estado === 'PENDIENTE'
+        ) || ests[0];
+
         setFormData((prev) => ({
           ...prev,
-          id_cliente: cls[0]?.id_cliente || '',
+          id_cliente: primerCliente?.id_cliente || '',
+          ubicacion_faena: ubicacionInicial,
           id_tipo_servicio: tipos[0]?.id_tipo_servicio || '',
           id_estado_obra: pendiente?.id_estado_obra || '',
         }));
+
       } catch (err) {
         console.error('Error al cargar catálogos:', err);
         setError('No se pudieron cargar los catálogos del servidor.');
@@ -53,61 +69,86 @@ export default function NuevaObra() {
         setCargandoCatalogos(false);
       }
     }
+
     cargarCatalogos();
   }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'id_cliente') {
+      const clienteSeleccionado = clientes.find(
+        (cliente) => String(cliente.id_cliente) === value
+      );
+
+      const ubicacionSugerida = clienteSeleccionado
+        ? [
+            clienteSeleccionado.direccion_matriz,
+            clienteSeleccionado.comuna,
+            clienteSeleccionado.ciudad,
+          ].filter(Boolean).join(', ')
+        : '';
+
+      setFormData((prev) => ({
+        ...prev,
+        id_cliente: value,
+        ubicacion_faena: ubicacionSugerida,
+      }));
+
+      return;
+    }
+
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!formData.nombre_obra.trim()) {
       setError('El nombre de la obra es requerido.');
       return;
     }
+
     if (!formData.id_cliente) {
       setError('Debe seleccionar un cliente.');
       return;
     }
+
     if (!formData.id_tipo_servicio) {
       setError('Debe clasificar la obra en un tipo de servicio.');
       return;
     }
 
     if (
-  formData.fecha_termino_estimada &&
-  formData.fecha_termino_estimada <= formData.fecha_inicio
-) {
-  setError('La fecha de término debe ser posterior a la fecha de inicio.');
-  return;
-}
+      formData.fecha_termino_estimada &&
+      formData.fecha_termino_estimada <= formData.fecha_inicio
+    ) {
+      setError('La fecha de término debe ser posterior a la fecha de inicio.');
+      return;
+    }
 
-const estadoPendiente = estados.find(
-  (estado) => estado.codigo_estado === 'PENDIENTE'
-);
+    const estadoPendiente = estados.find(
+      (estado) => estado.codigo_estado === 'PENDIENTE'
+    );
 
-
-if (!estadoPendiente) {
-  setError('No se encontró el estado Pendiente.');
-  return;
-}
-
+    if (!estadoPendiente) {
+      setError('No se encontró el estado Pendiente.');
+      return;
+    }
 
     try {
       setGuardando(true);
       setError(null);
 
-      // El modelo de Django espera supervisor (ForeignKey). Obtenemos o asignamos supervisor 1
       const payload = {
         codigo_obra: formData.codigo_obra,
         nombre_obra: formData.nombre_obra,
         ubicacion_faena: formData.ubicacion_faena,
+        especificaciones_lugar: formData.especificaciones_lugar,
         cliente: formData.id_cliente,
         tipo_servicio: parseInt(formData.id_tipo_servicio, 10),
         estado_obra: parseInt(estadoPendiente.id_estado_obra, 10),
-        supervisor: 1, // Supervisor predeterminado
+        supervisor: 1,
         fecha_inicio: formData.fecha_inicio,
         fecha_termino_estimada: formData.fecha_termino_estimada || null,
         costo_estimado: formData.costo_estimado ? parseFloat(formData.costo_estimado) : 0,
@@ -115,14 +156,14 @@ if (!estadoPendiente) {
 
       await obrasService.crearObra(payload);
 
-navigate('/dashboard-obras', {
-  state: {
-    notificacion: {
-      tipo: 'exito',
-      mensaje: '¡Obra creada exitosamente! La ficha se registró correctamente.',
-    },
-  },
-});
+      navigate('/dashboard-obras', {
+        state: {
+          notificacion: {
+            tipo: 'exito',
+            mensaje: '¡Obra creada exitosamente! La ficha se registró correctamente.',
+          },
+        },
+      });
     } catch (err) {
       console.error('Error al guardar obra:', err);
       const msg =
@@ -245,6 +286,19 @@ navigate('/dashboard-obras', {
           </div>
         </div>
 
+        <div className="form-group">
+          <label htmlFor="especificaciones_lugar">Especificaciones del lugar</label>
+          <textarea
+            id="especificaciones_lugar"
+            name="especificaciones_lugar"
+            className="form-control"
+            placeholder="Indique condiciones de acceso, restricciones, características del lugar y otras indicaciones relevantes..."
+            value={formData.especificaciones_lugar}
+            onChange={handleChange}
+            rows={4}
+          />
+        </div>
+
         <div className="form-grid">
           <div className="form-group">
             <label htmlFor="fecha_inicio">Fecha de Inicio *</label>
@@ -318,4 +372,3 @@ navigate('/dashboard-obras', {
     </div>
   );
 }
-

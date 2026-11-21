@@ -101,6 +101,7 @@ class Obra(models.Model):
  
     nombre_obra = models.CharField(max_length=200)
     ubicacion_faena = models.CharField(max_length=255)
+    especificaciones_lugar = models.TextField(blank=True)
  
     fecha_inicio = models.DateField()
     fecha_termino_estimada = models.DateField(null=True, blank=True)
