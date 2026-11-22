@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {Bar,BarChart,CartesianGrid, Cell,Legend,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis,} from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, } from 'recharts';
 import obrasService from '../Servicios/obrasService';
 import dashboardService from '../Servicios/dashboardService';
 
@@ -189,7 +189,7 @@ export default function GraficoDashObras({ intervaloMs = 15000 }) {
         {/* Gráfico 2: Agregación MongoDB - Maquinarias por Estado */}
         <div style={{ width: '100%', height: 310 }}>
           <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-            Estado de Maquinarias (MongoDB)
+            Estado de Maquinarias
           </h3>
           {datosMongo.maquinarias_por_estado.length === 0 ? (
             <p style={{ color: 'var(--text-muted)' }}>Sin registros de maquinarias en MongoDB.</p>

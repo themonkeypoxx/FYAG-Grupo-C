@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import authService from '../Servicios/authService';
+import NavbarNotificaciones from './NavbarNotificaciones';
 
 export default function Navbar() {
   const location = useLocation();
@@ -78,7 +79,8 @@ export default function Navbar() {
               + Presupuesto
             </Link>
           )}
-                    {esGerencial && (
+
+          {esGerencial && (
             <Link
               to="/usuarios"
               className={`nav-link ${location.pathname === '/usuarios' ? 'active' : ''}`}
@@ -92,6 +94,13 @@ export default function Navbar() {
               + Nueva Obra
             </Link>
           )}
+
+          {/* Campanita de Notificaciones para Gerente, Supervisor y Técnico */}
+          <NavbarNotificaciones
+            esGerencial={esGerencial}
+            esSupervisor={esSupervisor}
+            esTecnico={esTecnico}
+          />
 
           <div className="navbar-user">
             {usuario?.username && (

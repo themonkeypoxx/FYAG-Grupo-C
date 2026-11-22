@@ -67,6 +67,8 @@ export default function ModalCambiarEstado({
             {transicion.codigo_estado === 'FINALIZADA' && (
               <div className="cierre-alerta" style={{ marginBottom: '1rem' }}>
                 ℹ️ Al finalizar la obra, el sistema asignará automáticamente la fecha de cierre de hoy y no se permitirán modificaciones operativas posteriores.
+                <br />
+                <strong>Importante:</strong> Las facturas de presupuestos relacionados deben estar completamente pagadas para poder finalizar la obra.
               </div>
             )}
 

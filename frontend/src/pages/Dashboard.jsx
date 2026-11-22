@@ -258,6 +258,7 @@ export default function Dashboard() {
       console.error('Error al cambiar estado:', err);
       const errorMsg =
         err.response?.data?.error ||
+        err.response?.data?.detail ||
         'Error inesperado al intentar cambiar el estado.';
       setNotificacion({
         tipo: 'error',
@@ -269,33 +270,33 @@ export default function Dashboard() {
   };
 
   const aMinutos = (hora) => {
-  const [horas, minutos] = hora.slice(0, 5).split(':').map(Number);
-  return horas * 60 + minutos;
-};
+    const [horas, minutos] = hora.slice(0, 5).split(':').map(Number);
+    return horas * 60 + minutos;
+  };
 
-const bloqueOcupado = (bloque) => {
-  if (!asignacionForm.tecnico || !asignacionForm.fecha_inicio || !asignacionForm.fecha_termino) {
-    return false;
-  }
+  const bloqueOcupado = (bloque) => {
+    if (!asignacionForm.tecnico || !asignacionForm.fecha_inicio || !asignacionForm.fecha_termino) {
+      return false;
+    }
 
-  const horario = bloque === 'MANANA'
-    ? { inicio: '09:30', termino: '13:30' }
-    : { inicio: '15:00', termino: '17:00' };
+    const horario = bloque === 'MANANA'
+      ? { inicio: '09:30', termino: '13:30' }
+      : { inicio: '15:00', termino: '17:00' };
 
-  return asignacionesExistentes.some((a) => {
-    const mismoTecnico = String(a.tecnico) === String(asignacionForm.tecnico);
-    const dentroDelRango =
-      a.fecha >= asignacionForm.fecha_inicio &&
-      a.fecha <= asignacionForm.fecha_termino;
-    const dia = new Date(`${a.fecha}T12:00:00`).getDay();
-    const esDiaHabil = dia !== 0 && dia !== 6;
-    const seCruza =
-      aMinutos(a.hora_inicio) < aMinutos(horario.termino) &&
-      aMinutos(a.hora_termino) > aMinutos(horario.inicio);
+    return asignacionesExistentes.some((a) => {
+      const mismoTecnico = String(a.tecnico) === String(asignacionForm.tecnico);
+      const dentroDelRango =
+        a.fecha >= asignacionForm.fecha_inicio &&
+        a.fecha <= asignacionForm.fecha_termino;
+      const dia = new Date(`${a.fecha}T12:00:00`).getDay();
+      const esDiaHabil = dia !== 0 && dia !== 6;
+      const seCruza =
+        aMinutos(a.hora_inicio) < aMinutos(horario.termino) &&
+        aMinutos(a.hora_termino) > aMinutos(horario.inicio);
 
-    return a.activo && mismoTecnico && dentroDelRango && esDiaHabil && seCruza;
-  });
-};
+      return a.activo && mismoTecnico && dentroDelRango && esDiaHabil && seCruza;
+    });
+  };
 
   return (
     <div>
@@ -309,49 +310,16 @@ const bloqueOcupado = (bloque) => {
               notificacion.tipo === 'exito' ? 'var(--estado-finalizada-bg)' : 'var(--estado-cancelada-bg)',
             color:
               notificacion.tipo === 'exito' ? 'var(--estado-finalizada)' : 'var(--estado-cancelada)',
-            border: `1px solid ${
-              notificacion.tipo === 'exito' ? '#bbf7d0' : '#fecaca'
-            }`,
+            border: `1px solid ${notificacion.tipo === 'exito' ? '#bbf7d0' : '#fecaca'
+              }`,
             fontWeight: 600,
             fontSize: '0.9rem',
           }}
         >
-        {notificacion.mensaje}
+          {notificacion.mensaje}
         </div>
       )}
 
-      <section className="solicitudes-panel" aria-label="Solicitudes de técnicos">
-          <div className="solicitudes-panel-header">
-            <div>
-              <h2>Solicitudes de técnicos</h2>
-              <p>Revisa y resuelve las solicitudes de suspensión, cancelación o reanudación.</p>
-            </div>
-            <button type="button" className="btn-secondary" onClick={cargarSolicitudes} disabled={cargandoSolicitudes}>
-              {cargandoSolicitudes ? 'Actualizando…' : 'Actualizar solicitudes'}
-            </button>
-          </div>
-          {errorSolicitudes ? (
-            <p role="alert">{errorSolicitudes}</p>
-          ) : solicitudes.filter((solicitud) => solicitud.estado === 'PENDIENTE').length === 0 ? (
-            <p>{cargandoSolicitudes ? 'Cargando solicitudes…' : 'No hay solicitudes pendientes para las obras que supervisas.'}</p>
-          ) : (
-            <div className="solicitudes-lista">
-            {solicitudes.filter((solicitud) => solicitud.estado === 'PENDIENTE').map((solicitud) => (
-              <article className="solicitud-item" key={solicitud.id_solicitud}>
-                <div>
-                  <strong>{({ SUSPENSION: 'Suspensión', CANCELACION: 'Cancelación', REANUDACION: 'Reanudación' })[solicitud.tipo]} · {solicitud.obra_codigo}</strong>
-                  <span>{solicitud.obra_nombre} · Técnico: {solicitud.tecnico_nombre}</span>
-                  <p>{solicitud.motivo}</p>
-                </div>
-                <div className="solicitud-actions">
-                  <button type="button" className="btn-primary" onClick={() => resolverSolicitud(solicitud, 'APROBAR')}>Aprobar</button>
-                  <button type="button" className="btn-secondary" onClick={() => resolverSolicitud(solicitud, 'RECHAZAR')}>Rechazar</button>
-                </div>
-              </article>
-            ))}
-            </div>
-          )}
-        </section>
 
       <ClasificacionServicios
         tipoSeleccionado={tipoSeleccionado}

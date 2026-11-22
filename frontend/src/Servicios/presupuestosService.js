@@ -22,6 +22,36 @@ export const presupuestosService = {
     const response = await api.post('/obras/fyag/v1/presupuestos/', datosPresupuesto);
     return response.data;
   },
+
+  // Aprobar un presupuesto (Acción exclusiva de Gerente)
+  async aprobarPresupuesto(idPresupuesto) {
+    const response = await api.post(`/obras/fyag/v1/presupuestos/${idPresupuesto}/aprobar/`);
+    return response.data;
+  },
+
+  // Rechazar un presupuesto (Acción exclusiva de Gerente)
+  async rechazarPresupuesto(idPresupuesto, motivo = '') {
+    const response = await api.post(`/obras/fyag/v1/presupuestos/${idPresupuesto}/rechazar/`, { motivo });
+    return response.data;
+  },
+
+  // Obtener notificaciones de presupuestos para el gerente
+  async getNotificacionesPresupuesto() {
+    const response = await api.get('/obras/fyag/v1/notificaciones-presupuesto/');
+    return response.data;
+  },
+
+  // Marcar una notificación de presupuesto como leída
+  async marcarNotificacionLeida(idNotificacion) {
+    const response = await api.post(`/obras/fyag/v1/notificaciones-presupuesto/${idNotificacion}/marcar-leida/`);
+    return response.data;
+  },
+
+  // Marcar todas las notificaciones como leídas
+  async marcarTodasNotificacionesLeidas() {
+    const response = await api.post('/obras/fyag/v1/notificaciones-presupuesto/marcar-todas-leidas/');
+    return response.data;
+  },
 };
 
 export default presupuestosService;

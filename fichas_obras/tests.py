@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from .models import (
     AsignacionTecnico, Cliente, EstadoObra, Obra, TipoServicio,
-    Presupuesto, Factura, RegistroPago
+    Presupuesto, Factura, RegistroPago, NotificacionPresupuesto
 )
 from .services import aplicar_transicion_estado, validar_transicion_estado
 
@@ -1049,4 +1049,322 @@ class ResumenFinancieroTests(TestCase):
         self.assertIn("porcentaje_morosidad", mora)
         self.assertIn("facturas_vencidas_cantidad", mora)
         self.assertIn("clientes_morosos_cantidad", mora)
+
+
+class NotificacionesYAprobacionPresupuestosTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        # Grupos
+        self.grupo_gerente, _ = Group.objects.get_or_create(name="Gerencial")
+        self.grupo_admin, _ = Group.objects.get_or_create(name="Administrativo")
+        self.grupo_tecnico, _ = Group.objects.get_or_create(name="Tecnico")
+
+        # Usuarios
+        self.user_gerente = User.objects.create_user(username="gerente_presupuestos", password="password123")
+        self.user_gerente.groups.add(self.grupo_gerente)
+
+        self.user_admin = User.objects.create_user(username="admin_presupuestos", password="password123")
+        self.user_admin.groups.add(self.grupo_admin)
+
+        self.user_tecnico = User.objects.create_user(username="tecnico_presupuestos", password="password123")
+        self.user_tecnico.groups.add(self.grupo_tecnico)
+
+        # Datos base
+        self.cliente = Cliente.objects.create(
+            rut_empresa="76543210-9",
+            razon_social="Constructora BioBio SpA",
+            estado_cliente=Cliente.EstadoCliente.ACTIVO
+        )
+        self.tipo_servicio = TipoServicio.objects.create(
+            codigo="CLIMA_NOTIF",
+            nombre_servicio="Climatización Comercial"
+        )
+        self.estado_ejecucion, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="EJECUCION",
+            defaults={"descripcion": "En Ejecución"}
+        )
+        self.obra = Obra.objects.create(
+            codigo_obra="OBRA-NOTIF-001",
+            nombre_obra="Instalación HVAC Torre A",
+            ubicacion_faena="Concepción",
+            fecha_inicio=date(2026, 3, 1),
+            cliente=self.cliente,
+            tipo_servicio=self.tipo_servicio,
+            estado_obra=self.estado_ejecucion,
+            supervisor=self.user_gerente,
+        )
+
+    def test_crear_presupuesto_genera_notificacion_para_gerente(self):
+        """Al crear un presupuesto se debe notificar automáticamente a los gerentes."""
+        self.client.force_authenticate(user=self.user_admin)
+        res = self.client.post("/obras/fyag/v1/presupuestos/", {
+            "obra": str(self.obra.id_obra),
+            "subtotal": "500000.00",
+            "estado_presupuesto": "Borrador"
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        presupuesto_id = res.data["id_presupuesto"]
+        notifs = NotificacionPresupuesto.objects.filter(
+            usuario=self.user_gerente,
+            presupuesto_id=presupuesto_id
+        )
+        self.assertTrue(notifs.exists())
+        notif = notifs.first()
+        self.assertFalse(notif.leida)
+        self.assertIn("Nuevo presupuesto", notif.mensaje)
+
+    def test_gerente_puede_aprobar_presupuesto_exitosamente(self):
+        """Un usuario con rol Gerencial puede aprobar un presupuesto y registrarse como aprobador."""
+        presupuesto = Presupuesto.objects.create(
+            numero_presupuesto="PRE-APROB-001",
+            obra=self.obra,
+            cliente=self.cliente,
+            creador=self.user_admin,
+            subtotal=Decimal("100000.00"),
+            monto_iva=Decimal("19000.00"),
+            monto_total=Decimal("119000.00"),
+            estado_presupuesto=Presupuesto.EstadoPresupuesto.PENDIENTE_APROBACION
+        )
+        NotificacionPresupuesto.objects.create(
+            usuario=self.user_gerente,
+            presupuesto=presupuesto,
+            tipo="PENDIENTE",
+            mensaje="Pendiente de aprobación"
+        )
+
+        self.client.force_authenticate(user=self.user_gerente)
+        url = f"/obras/fyag/v1/presupuestos/{presupuesto.id_presupuesto}/aprobar/"
+        res = self.client.post(url, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        presupuesto.refresh_from_db()
+        self.assertEqual(presupuesto.estado_presupuesto, Presupuesto.EstadoPresupuesto.APROBADO)
+        self.assertEqual(presupuesto.aprobador_gerencia, self.user_gerente)
+
+        # La notificación debe haberse marcado como leída
+        notif = NotificacionPresupuesto.objects.get(usuario=self.user_gerente, presupuesto=presupuesto)
+        self.assertTrue(notif.leida)
+
+    def test_gerente_puede_rechazar_presupuesto_exitosamente(self):
+        """Un usuario con rol Gerencial puede rechazar un presupuesto."""
+        presupuesto = Presupuesto.objects.create(
+            numero_presupuesto="PRE-RECH-001",
+            obra=self.obra,
+            cliente=self.cliente,
+            creador=self.user_admin,
+            subtotal=Decimal("100000.00"),
+            monto_iva=Decimal("19000.00"),
+            monto_total=Decimal("119000.00"),
+            estado_presupuesto=Presupuesto.EstadoPresupuesto.BORRADOR
+        )
+
+        self.client.force_authenticate(user=self.user_gerente)
+        url = f"/obras/fyag/v1/presupuestos/{presupuesto.id_presupuesto}/rechazar/"
+        res = self.client.post(url, {"motivo": "Precio unitario excesivo"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        presupuesto.refresh_from_db()
+        self.assertEqual(presupuesto.estado_presupuesto, Presupuesto.EstadoPresupuesto.RECHAZADO)
+        self.assertEqual(presupuesto.aprobador_gerencia, self.user_gerente)
+
+    def test_usuario_no_gerencial_no_puede_aprobar_ni_rechazar(self):
+        """Usuarios sin rol Gerencial reciben 403 Forbidden al intentar aprobar o rechazar."""
+        presupuesto = Presupuesto.objects.create(
+            numero_presupuesto="PRE-NOAUTH-001",
+            obra=self.obra,
+            cliente=self.cliente,
+            creador=self.user_admin,
+            subtotal=Decimal("100000.00"),
+            monto_iva=Decimal("19000.00"),
+            monto_total=Decimal("119000.00"),
+            estado_presupuesto=Presupuesto.EstadoPresupuesto.PENDIENTE_APROBACION
+        )
+
+        # Probar como Administrativo
+        self.client.force_authenticate(user=self.user_admin)
+        url_aprobar = f"/obras/fyag/v1/presupuestos/{presupuesto.id_presupuesto}/aprobar/"
+        res = self.client.post(url_aprobar, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # Probar como Técnico
+        self.client.force_authenticate(user=self.user_tecnico)
+        url_rechazar = f"/obras/fyag/v1/presupuestos/{presupuesto.id_presupuesto}/rechazar/"
+        res = self.client.post(url_rechazar, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_gerente_puede_listar_y_marcar_notificaciones_leidas(self):
+        """El gerente puede ver sus notificaciones y marcarlas como leídas."""
+        presupuesto = Presupuesto.objects.create(
+            numero_presupuesto="PRE-LIST-001",
+            obra=self.obra,
+            cliente=self.cliente,
+            creador=self.user_admin,
+            subtotal=Decimal("100000.00"),
+            monto_iva=Decimal("19000.00"),
+            monto_total=Decimal("119000.00"),
+        )
+        notif = NotificacionPresupuesto.objects.create(
+            usuario=self.user_gerente,
+            presupuesto=presupuesto,
+            mensaje="Test notificacion",
+            leida=False
+        )
+
+        self.client.force_authenticate(user=self.user_gerente)
+        res_list = self.client.get("/obras/fyag/v1/notificaciones-presupuesto/")
+        self.assertEqual(res_list.status_code, status.HTTP_200_OK)
+        ids = [item["id"] for item in (res_list.data if isinstance(res_list.data, list) else res_list.data.get("results", []))]
+        self.assertIn(notif.id, ids)
+
+        # Marcar leída
+        res_marcar = self.client.post(f"/obras/fyag/v1/notificaciones-presupuesto/{notif.id}/marcar-leida/")
+        self.assertEqual(res_marcar.status_code, status.HTTP_200_OK)
+        notif.refresh_from_db()
+        self.assertTrue(notif.leida)
+
+
+class BloqueoFinalizacionObraFacturaPendienteTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.grupo_gerente, _ = Group.objects.get_or_create(name="Gerencial")
+        self.user_gerente = User.objects.create_user(username="gerente_bloqueo", password="password123")
+        self.user_gerente.groups.add(self.grupo_gerente)
+        self.client.force_authenticate(user=self.user_gerente)
+
+        self.cliente = Cliente.objects.create(
+            rut_empresa="77111222-3",
+            razon_social="Inmobiliaria San Pedro Ltda",
+            estado_cliente=Cliente.EstadoCliente.ACTIVO
+        )
+        self.tipo_servicio = TipoServicio.objects.create(
+            codigo="ELEC_BLOQ",
+            nombre_servicio="Proyecto Eléctrico"
+        )
+        self.estado_ejecucion, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="EJECUCION",
+            defaults={"descripcion": "En Ejecución"}
+        )
+        self.estado_finalizada, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="FINALIZADA",
+            defaults={"descripcion": "Finalizada"}
+        )
+
+        self.obra = Obra.objects.create(
+            codigo_obra="OBRA-BLOQ-001",
+            nombre_obra="Subestación Eléctrica Fase 1",
+            ubicacion_faena="San Pedro de la Paz",
+            fecha_inicio=date(2026, 1, 10),
+            cliente=self.cliente,
+            tipo_servicio=self.tipo_servicio,
+            estado_obra=self.estado_ejecucion,
+            supervisor=self.user_gerente,
+        )
+
+        self.presupuesto = Presupuesto.objects.create(
+            numero_presupuesto="PRE-BLOQ-001",
+            obra=self.obra,
+            cliente=self.cliente,
+            creador=self.user_gerente,
+            subtotal=Decimal("1000000.00"),
+            monto_iva=Decimal("190000.00"),
+            monto_total=Decimal("1190000.00"),
+            estado_presupuesto=Presupuesto.EstadoPresupuesto.APROBADO
+        )
+
+    def test_obra_con_presupuesto_sin_factura_no_puede_finalizarse(self):
+        """Si la obra tiene presupuesto aprobado pero sin factura emitida, no puede finalizarse."""
+        with self.assertRaises(Exception) as ctx:
+            aplicar_transicion_estado(self.obra, "FINALIZADA")
+        self.assertIn("no cuenta con una factura emitida", str(ctx.exception))
+
+    def test_obra_con_presupuesto_y_factura_pendiente_no_puede_finalizarse(self):
+        """Si la factura tiene saldo pendiente y estado Pendiente, no puede finalizarse."""
+        Factura.objects.create(
+            folio_factura="FAC-BLOQ-001",
+            presupuesto=self.presupuesto,
+            cliente=self.cliente,
+            fecha_emision=date(2026, 2, 1),
+            fecha_vencimiento=date(2026, 3, 1),
+            monto_total=Decimal("1190000.00"),
+            saldo_pendiente=Decimal("1190000.00"),
+            estado_pago=Factura.EstadoPago.PENDIENTE
+        )
+
+        with self.assertRaises(Exception) as ctx:
+            aplicar_transicion_estado(self.obra, "FINALIZADA")
+        self.assertIn("no está completamente pagada", str(ctx.exception))
+
+    def test_obra_con_presupuesto_y_factura_pago_parcial_no_puede_finalizarse(self):
+        """Si la factura tiene saldo pendiente y estado Pago Parcial, no puede finalizarse."""
+        Factura.objects.create(
+            folio_factura="FAC-BLOQ-002",
+            presupuesto=self.presupuesto,
+            cliente=self.cliente,
+            fecha_emision=date(2026, 2, 1),
+            fecha_vencimiento=date(2026, 3, 1),
+            monto_total=Decimal("1190000.00"),
+            saldo_pendiente=Decimal("400000.00"),
+            estado_pago=Factura.EstadoPago.PAGO_PARCIAL
+        )
+
+        with self.assertRaises(Exception) as ctx:
+            aplicar_transicion_estado(self.obra, "FINALIZADA")
+        self.assertIn("no está completamente pagada", str(ctx.exception))
+
+    def test_obra_con_presupuesto_y_factura_pagada_puede_finalizarse(self):
+        """Cuando todas las facturas del presupuesto están pagadas y saldo 0, la obra se finaliza exitosamente."""
+        Factura.objects.create(
+            folio_factura="FAC-BLOQ-003",
+            presupuesto=self.presupuesto,
+            cliente=self.cliente,
+            fecha_emision=date(2026, 2, 1),
+            fecha_vencimiento=date(2026, 3, 1),
+            monto_total=Decimal("1190000.00"),
+            saldo_pendiente=Decimal("0.00"),
+            estado_pago=Factura.EstadoPago.PAGADO
+        )
+
+        obra_fin = aplicar_transicion_estado(self.obra, "FINALIZADA")
+        self.assertEqual(obra_fin.estado_obra.codigo_estado, "FINALIZADA")
+        self.assertIsNotNone(obra_fin.fecha_cierre_real)
+
+    def test_api_cambiar_estado_rechaza_finalizar_si_factura_impaga(self):
+        """Endpoint de cambio de estado retorna 400 si la factura del presupuesto no está pagada."""
+        Factura.objects.create(
+            folio_factura="FAC-BLOQ-API-001",
+            presupuesto=self.presupuesto,
+            cliente=self.cliente,
+            fecha_emision=date(2026, 2, 1),
+            fecha_vencimiento=date(2026, 3, 1),
+            monto_total=Decimal("1190000.00"),
+            saldo_pendiente=Decimal("1190000.00"),
+            estado_pago=Factura.EstadoPago.PENDIENTE
+        )
+
+        url = f"/obras/fyag/v1/obras/{self.obra.id_obra}/cambiar-estado/"
+        res = self.client.post(url, {"nuevo_estado": "FINALIZADA"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("no está completamente pagada", str(res.data.get("error", "")))
+
+    def test_api_cambiar_estado_permite_finalizar_cuando_factura_esta_pagada(self):
+        """Endpoint de cambio de estado retorna 200 y finaliza cuando la factura está 100% pagada."""
+        Factura.objects.create(
+            folio_factura="FAC-BLOQ-API-002",
+            presupuesto=self.presupuesto,
+            cliente=self.cliente,
+            fecha_emision=date(2026, 2, 1),
+            fecha_vencimiento=date(2026, 3, 1),
+            monto_total=Decimal("1190000.00"),
+            saldo_pendiente=Decimal("0.00"),
+            estado_pago=Factura.EstadoPago.PAGADO
+        )
+
+        url = f"/obras/fyag/v1/obras/{self.obra.id_obra}/cambiar-estado/"
+        res = self.client.post(url, {"nuevo_estado": "FINALIZADA"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.obra.refresh_from_db()
+        self.assertEqual(self.obra.estado_obra.codigo_estado, "FINALIZADA")
 
