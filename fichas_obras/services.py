@@ -96,6 +96,40 @@ def validar_transicion_estado(
                 f"Debe especificar obligatoriamente un motivo para {accion} la obra."
             )
 
+    # Regla de negocio: una obra no puede ser finalizada hasta que la factura del presupuesto
+    # relacionada a ella no esté completamente pagada.
+    if nuevo_codigo == "FINALIZADA":
+        from .models import Factura
+        presupuestos_obra = obra.presupuestos.filter(soft_deleted=False)
+        if presupuestos_obra.exists():
+            presupuestos_activos = presupuestos_obra.exclude(estado_presupuesto="Rechazado")
+            presupuestos_sin_factura = [
+                p.numero_presupuesto
+                for p in presupuestos_activos
+                if not p.facturas.filter(soft_deleted=False).exists()
+            ]
+            if presupuestos_sin_factura:
+                raise serializers.ValidationError(
+                    f"No se puede finalizar la obra: el presupuesto {', '.join(presupuestos_sin_factura)} no cuenta con una factura emitida y completamente pagada."
+                )
+
+            facturas_obra = Factura.objects.filter(
+                presupuesto__in=presupuestos_obra,
+                soft_deleted=False
+            )
+            facturas_no_pagadas = [
+                f for f in facturas_obra
+                if f.estado_pago != Factura.EstadoPago.PAGADO or f.saldo_pendiente > 0
+            ]
+            if facturas_no_pagadas:
+                detalles = [
+                    f"'{f.folio_factura}' (presupuesto '{f.presupuesto.numero_presupuesto}', estado: {f.estado_pago}, saldo pendiente: ${f.saldo_pendiente})"
+                    for f in facturas_no_pagadas
+                ]
+                raise serializers.ValidationError(
+                    f"No se puede finalizar la obra: la factura del presupuesto relacionada a ella no está completamente pagada ({', '.join(detalles)})."
+                )
+
     try:
         nuevo_estado = EstadoObra.objects.get(codigo_estado=nuevo_codigo)
     except EstadoObra.DoesNotExist:

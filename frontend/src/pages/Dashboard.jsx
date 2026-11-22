@@ -258,6 +258,7 @@ export default function Dashboard() {
       console.error('Error al cambiar estado:', err);
       const errorMsg =
         err.response?.data?.error ||
+        err.response?.data?.detail ||
         'Error inesperado al intentar cambiar el estado.';
       setNotificacion({
         tipo: 'error',

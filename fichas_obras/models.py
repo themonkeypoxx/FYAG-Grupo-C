@@ -283,6 +283,44 @@ class Presupuesto(models.Model):
  
     def __str__(self):
         return f"{self.numero_presupuesto} ({self.estado_presupuesto})"
+
+
+# ---------------------------------------------------------------------------
+# Notificaciones de presupuestos para el Gerente
+# ---------------------------------------------------------------------------
+class NotificacionPresupuesto(models.Model):
+    class TipoEvento(models.TextChoices):
+        CREADO = "CREADO", "Presupuesto Creado"
+        PENDIENTE = "PENDIENTE", "Pendiente de Aprobación"
+        APROBADO = "APROBADO", "Presupuesto Aprobado"
+        RECHAZADO = "RECHAZADO", "Presupuesto Rechazado"
+
+    id = models.AutoField(primary_key=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notificaciones_presupuesto",
+    )
+    presupuesto = models.ForeignKey(
+        Presupuesto,
+        on_delete=models.CASCADE,
+        related_name="notificaciones",
+    )
+    tipo = models.CharField(
+        max_length=30,
+        choices=TipoEvento.choices,
+        default=TipoEvento.CREADO,
+    )
+    mensaje = models.CharField(max_length=255)
+    creada_en = models.DateTimeField(default=timezone.now)
+    leida = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "notificacion_presupuesto"
+        ordering = ["-creada_en"]
+
+    def __str__(self):
+        return f"{self.tipo} - {self.presupuesto.numero_presupuesto} -> {self.usuario.username}"
  
  
 # ---------------------------------------------------------------------------

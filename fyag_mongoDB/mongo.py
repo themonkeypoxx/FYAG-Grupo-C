@@ -12,7 +12,7 @@ maquinarias_collection = audit_db['maquinarias']
 NOMBRE_COLECCION = 'logs_auditoria'
 audit_logs_collection = audit_db[NOMBRE_COLECCION]
 
-coleccion_inicializada = False
+_coleccion_inicializada = False
 
 def asegurar_coleccion_timeseries():
     global _coleccion_inicializada

@@ -18,7 +18,7 @@ from .serializer import CustomTokenObtainPairSerializer
 from .models import (
     AsignacionTecnico, Cliente, EstadoObra, Factura, ItemPresupuesto, Obra,
     Presupuesto, RegistroPago, SolicitudCambioObra, TipoServicio, NotificacionTecnico, 
-    AsignacionMaterial, Material
+    NotificacionPresupuesto, AsignacionMaterial, Material
 
 )
 from .permissions import EsGerencial, EsSupervisor, EsAdministrativo, EsTecnico 
@@ -35,6 +35,7 @@ from .serializer import (
     RegistroPagoSerializer,
     SolicitudCambioObraSerializer,
     NotificacionTecnicoSerializer,
+    NotificacionPresupuestoSerializer,
     MaterialSerializer,
     AsignacionMaterialSerializer
 )
@@ -62,8 +63,44 @@ def notificar_tecnicos_de_obra(obra, estado_codigo):
         for tecnico_id in tecnico_ids
     ])
 
+
+def notificar_gerentes_presupuesto(presupuesto, tipo="CREADO", mensaje=None):
+    """Genera notificaciones de presupuesto para usuarios con rol Gerencial o administradores."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    gerentes = User.objects.filter(
+        Q(groups__name__in=["Gerencial", "GERENCIA", "Gerente", "Gerencia"])
+        | Q(is_superuser=True)
+    ).distinct()
+
+    if not mensaje:
+        if tipo == "CREADO":
+            mensaje = f"Nuevo presupuesto {presupuesto.numero_presupuesto} para la obra {presupuesto.obra.codigo_obra} registrado por ${presupuesto.monto_total:,.0f}."
+        elif tipo == "PENDIENTE":
+            mensaje = f"Presupuesto {presupuesto.numero_presupuesto} pendiente de aprobación gerencial."
+        elif tipo == "APROBADO":
+            mensaje = f"Presupuesto {presupuesto.numero_presupuesto} fue aprobado por Gerencia."
+        elif tipo == "RECHAZADO":
+            mensaje = f"Presupuesto {presupuesto.numero_presupuesto} fue rechazado por Gerencia."
+        else:
+            mensaje = f"Actualización en presupuesto {presupuesto.numero_presupuesto}."
+
+    notifs = [
+        NotificacionPresupuesto(
+            usuario=g,
+            presupuesto=presupuesto,
+            tipo=tipo,
+            mensaje=mensaje,
+        )
+        for g in gerentes
+    ]
+    if notifs:
+        NotificacionPresupuesto.objects.bulk_create(notifs)
+
+
 class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo | EsTecnico]
+    permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo]
     """
     CRUD principal de Obras con clasificación por tipo de servicio,
     búsqueda, filtros y máquina de estados operativos.
@@ -218,7 +255,13 @@ class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_200_OK,
             )
         except Exception as exc:
-            mensaje = exc.detail if hasattr(exc, "detail") else str(exc)
+            if hasattr(exc, "detail"):
+                if isinstance(exc.detail, list) and exc.detail:
+                    mensaje = str(exc.detail[0])
+                else:
+                    mensaje = str(exc.detail)
+            else:
+                mensaje = str(exc)
             return Response({"error": mensaje}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["get"], url_path="resumen-tipos")
@@ -548,7 +591,7 @@ class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
 
 
 class PresupuestoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
-    permission_classes = [EsGerencial | EsAdministrativo]
+    permission_classes = [EsGerencial | EsAdministrativo | EsSupervisor]
     serializer_class = PresupuestoSerializer
 
     def get_queryset(self):
@@ -575,8 +618,95 @@ class PresupuestoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        # Asignar automáticamente el creador como el usuario autenticado
-        serializer.save(creador=self.request.user)
+        presupuesto = serializer.save(creador=self.request.user)
+        notificar_gerentes_presupuesto(
+            presupuesto=presupuesto,
+            tipo="CREADO",
+            mensaje=f"Nuevo presupuesto {presupuesto.numero_presupuesto} registrado para {presupuesto.obra.codigo_obra} por ${presupuesto.monto_total:,.0f}."
+        )
+
+    @action(detail=True, methods=["post"], url_path="aprobar", permission_classes=[EsGerencial])
+    def aprobar(self, request, pk=None):
+        presupuesto = self.get_object()
+        presupuesto.estado_presupuesto = Presupuesto.EstadoPresupuesto.APROBADO
+        presupuesto.aprobador_gerencia = request.user
+        presupuesto.save(update_fields=["estado_presupuesto", "aprobador_gerencia"])
+
+        NotificacionPresupuesto.objects.filter(
+            usuario=request.user, presupuesto=presupuesto
+        ).update(leida=True)
+
+        registrar_evento(
+            request=request,
+            accion="PRESUPUESTO_APROBADO",
+            recurso="Presupuesto",
+            recurso_id=presupuesto.id_presupuesto,
+            detalles={
+                "numero_presupuesto": presupuesto.numero_presupuesto,
+                "obra": presupuesto.obra.codigo_obra,
+                "aprobado_por": request.user.username,
+            },
+        )
+        return Response({
+            "mensaje": f"Presupuesto {presupuesto.numero_presupuesto} aprobado exitosamente.",
+            "presupuesto": self.get_serializer(presupuesto).data,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="rechazar", permission_classes=[EsGerencial])
+    def rechazar(self, request, pk=None):
+        presupuesto = self.get_object()
+        motivo = request.data.get("motivo", "").strip()
+        presupuesto.estado_presupuesto = Presupuesto.EstadoPresupuesto.RECHAZADO
+        presupuesto.aprobador_gerencia = request.user
+        presupuesto.save(update_fields=["estado_presupuesto", "aprobador_gerencia"])
+
+        NotificacionPresupuesto.objects.filter(
+            usuario=request.user, presupuesto=presupuesto
+        ).update(leida=True)
+
+        registrar_evento(
+            request=request,
+            accion="PRESUPUESTO_RECHAZADO",
+            recurso="Presupuesto",
+            recurso_id=presupuesto.id_presupuesto,
+            detalles={
+                "numero_presupuesto": presupuesto.numero_presupuesto,
+                "obra": presupuesto.obra.codigo_obra,
+                "motivo": motivo,
+                "rechazado_por": request.user.username,
+            },
+        )
+        return Response({
+            "mensaje": f"Presupuesto {presupuesto.numero_presupuesto} rechazado.",
+            "presupuesto": self.get_serializer(presupuesto).data,
+        }, status=status.HTTP_200_OK)
+
+
+class NotificacionPresupuestoViewSet(viewsets.ModelViewSet):
+    permission_classes = [EsGerencial]
+    serializer_class = NotificacionPresupuestoSerializer
+    http_method_names = ["get", "post", "patch", "head", "options"]
+
+    def get_queryset(self):
+        return (
+            NotificacionPresupuesto.objects.filter(usuario=self.request.user)
+            .select_related("presupuesto", "presupuesto__obra", "presupuesto__cliente", "presupuesto__creador")
+            .order_by("-creada_en")
+        )
+
+    @action(detail=True, methods=["post"], url_path="marcar-leida")
+    def marcar_leida(self, request, pk=None):
+        notif = self.get_object()
+        notif.leida = True
+        notif.save(update_fields=["leida"])
+        return Response({"mensaje": "Notificación marcada como leída.", "id": notif.id})
+
+    @action(detail=False, methods=["post"], url_path="marcar-todas-leidas")
+    def marcar_todas_leidas(self, request):
+        actualizadas = NotificacionPresupuesto.objects.filter(
+            usuario=request.user, leida=False
+        ).update(leida=True)
+        return Response({"mensaje": f"{actualizadas} notificaciones marcadas como leídas."})
 
 
 class ItemPresupuestoViewSet(viewsets.ModelViewSet):

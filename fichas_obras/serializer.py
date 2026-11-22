@@ -219,6 +219,34 @@ class NotificacionTecnicoSerializer(serializers.ModelSerializer):
         fields = ["id", "obra", "obra_codigo", "obra_nombre", "estado_codigo", "estado_descripcion", "creada_en", "leida"]
 
 
+class NotificacionPresupuestoSerializer(serializers.ModelSerializer):
+    presupuesto_numero = serializers.CharField(source="presupuesto.numero_presupuesto", read_only=True)
+    presupuesto_total = serializers.DecimalField(source="presupuesto.monto_total", max_digits=14, decimal_places=2, read_only=True)
+    presupuesto_subtotal = serializers.DecimalField(source="presupuesto.subtotal", max_digits=14, decimal_places=2, read_only=True)
+    presupuesto_iva = serializers.DecimalField(source="presupuesto.monto_iva", max_digits=14, decimal_places=2, read_only=True)
+    presupuesto_estado = serializers.CharField(source="presupuesto.estado_presupuesto", read_only=True)
+    obra_id = serializers.CharField(source="presupuesto.obra_id", read_only=True)
+    obra_codigo = serializers.CharField(source="presupuesto.obra.codigo_obra", read_only=True)
+    obra_nombre = serializers.CharField(source="presupuesto.obra.nombre_obra", read_only=True)
+    cliente_nombre = serializers.CharField(source="presupuesto.cliente.razon_social", read_only=True)
+    cliente_rut = serializers.CharField(source="presupuesto.cliente.rut_empresa", read_only=True)
+    creador_nombre = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NotificacionPresupuesto
+        fields = [
+            "id", "presupuesto", "presupuesto_numero", "presupuesto_subtotal",
+            "presupuesto_iva", "presupuesto_total", "presupuesto_estado",
+            "obra_id", "obra_codigo", "obra_nombre", "cliente_nombre",
+            "cliente_rut", "creador_nombre", "tipo", "mensaje", "creada_en", "leida",
+        ]
+
+    def get_creador_nombre(self, obj):
+        if obj.presupuesto and obj.presupuesto.creador:
+            return obj.presupuesto.creador.get_full_name() or obj.presupuesto.creador.username
+        return ""
+
+
 class SolicitudCambioObraSerializer(serializers.ModelSerializer):
     obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
     obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
@@ -289,6 +317,7 @@ class PresupuestoSerializer(serializers.ModelSerializer):
     obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
     obra_estado = serializers.CharField(source="obra.estado_obra.descripcion", read_only=True)
     creador_nombre = serializers.SerializerMethodField()
+    aprobador_gerencia_nombre = serializers.SerializerMethodField()
 
     class Meta:
         model = Presupuesto
@@ -310,6 +339,12 @@ class PresupuestoSerializer(serializers.ModelSerializer):
             return ""
         full = obj.creador.get_full_name()
         return full if full else obj.creador.username
+
+    def get_aprobador_gerencia_nombre(self, obj):
+        if not obj.aprobador_gerencia:
+            return ""
+        full = obj.aprobador_gerencia.get_full_name()
+        return full if full else obj.aprobador_gerencia.username
 
     def validate(self, attrs):
         obra = attrs.get("obra") or (self.instance.obra if self.instance else None)

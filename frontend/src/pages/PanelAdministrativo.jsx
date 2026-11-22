@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../Servicios/api';
+import authService from '../Servicios/authService';
+import presupuestosService from '../Servicios/presupuestosService';
 
 // Formato de moneda CLP
 const formatearCLP = (monto) => {
@@ -94,8 +96,51 @@ export default function PanelAdministrativo() {
   // -------------------------------------------------------------
   // ESTADOS: Presupuestos (Resumen)
   // -------------------------------------------------------------
+  const esGerencial = authService.tieneRol('Gerencial');
   const [presupuestos, setPresupuestos] = useState([]);
   const [cargandoPresupuestos, setCargandoPresupuestos] = useState(false);
+  const [procesandoPresupuestoId, setProcesandoPresupuestoId] = useState(null);
+
+  const handleAprobarPresupuesto = async (idPresupuesto, numero) => {
+    if (!window.confirm(`¿Confirma que desea APROBAR el presupuesto '${numero}' como Gerencia?`)) {
+      return;
+    }
+    try {
+      setProcesandoPresupuestoId(idPresupuesto);
+      await presupuestosService.aprobarPresupuesto(idPresupuesto);
+      setNotificacion({
+        tipo: 'exito',
+        mensaje: `Presupuesto '${numero}' aprobado exitosamente por Gerencia.`,
+      });
+      await cargarPresupuestos();
+    } catch (err) {
+      console.error('Error al aprobar presupuesto:', err);
+      const errMsg = err.response?.data?.detail || err.response?.data?.error || 'No se pudo aprobar el presupuesto.';
+      setNotificacion({ tipo: 'error', mensaje: errMsg });
+    } finally {
+      setProcesandoPresupuestoId(null);
+    }
+  };
+
+  const handleRechazarPresupuesto = async (idPresupuesto, numero) => {
+    const motivo = window.prompt(`Ingrese el motivo para RECHAZAR el presupuesto '${numero}':`, '');
+    if (motivo === null) return;
+    try {
+      setProcesandoPresupuestoId(idPresupuesto);
+      await presupuestosService.rechazarPresupuesto(idPresupuesto, motivo);
+      setNotificacion({
+        tipo: 'exito',
+        mensaje: `Presupuesto '${numero}' rechazado por Gerencia.`,
+      });
+      await cargarPresupuestos();
+    } catch (err) {
+      console.error('Error al rechazar presupuesto:', err);
+      const errMsg = err.response?.data?.detail || err.response?.data?.error || 'No se pudo rechazar el presupuesto.';
+      setNotificacion({ tipo: 'error', mensaje: errMsg });
+    } finally {
+      setProcesandoPresupuestoId(null);
+    }
+  };
 
   // -------------------------------------------------------------
   // HANDLER: Exportar PDF
@@ -1098,18 +1143,73 @@ export default function PanelAdministrativo() {
                           </span>
                         </td>
                         <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPestanaActiva('facturas');
-                              setModalNuevaFactura(true);
-                              handlePresupuestoSeleccionado(p.id_presupuesto);
-                            }}
-                            className="btn-secondary"
-                            style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
-                          >
-                            🧾 Facturar
-                          </button>
+                          <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            {esGerencial && p.estado_presupuesto !== 'Aprobado' && p.estado_presupuesto !== 'Rechazado' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAprobarPresupuesto(p.id_presupuesto, p.numero_presupuesto)}
+                                  disabled={procesandoPresupuestoId === p.id_presupuesto}
+                                  title="Aprobar presupuesto como Gerente"
+                                  style={{
+                                    fontSize: '0.75rem',
+                                    padding: '0.3rem 0.6rem',
+                                    backgroundColor: '#16a34a',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  ✓ Aprobar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRechazarPresupuesto(p.id_presupuesto, p.numero_presupuesto)}
+                                  disabled={procesandoPresupuestoId === p.id_presupuesto}
+                                  title="Rechazar presupuesto"
+                                  style={{
+                                    fontSize: '0.75rem',
+                                    padding: '0.3rem 0.6rem',
+                                    backgroundColor: '#dc2626',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  ✕ Rechazar
+                                </button>
+                              </>
+                            )}
+                            {p.estado_presupuesto === 'Aprobado' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPestanaActiva('facturas');
+                                  setModalNuevaFactura(true);
+                                  handlePresupuestoSeleccionado(p.id_presupuesto);
+                                }}
+                                className="btn-secondary"
+                                style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                                title="Generar factura para este presupuesto aprobado"
+                              >
+                                🧾 Facturar
+                              </button>
+                            )}
+                            {p.estado_presupuesto === 'Rechazado' && (
+                              <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                                Rechazado
+                              </span>
+                            )}
+                            {!esGerencial && p.estado_presupuesto !== 'Aprobado' && p.estado_presupuesto !== 'Rechazado' && (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                Pendiente Gerencia
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
