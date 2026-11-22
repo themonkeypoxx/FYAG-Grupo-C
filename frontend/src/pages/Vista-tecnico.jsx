@@ -25,7 +25,7 @@ export default function VistaTecnico() {
   const [aviso, setAviso] = useState(null);    // aviso de solicitud enviada
   const [pestana, setPestana] = useState('HORARIO');
   const [notificaciones, setNotificaciones] = useState([]);
- //se separan para evitar q se borre le horario cndo hay un aviso - Ismael
+  //se separan para evitar q se borre le horario cndo hay un aviso - Ismael
   useEffect(() => {
     const cargarVista = async () => {
       try {
@@ -127,25 +127,16 @@ export default function VistaTecnico() {
   return <main className="main-content" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
     <nav aria-label="Secciones del técnico" style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem' }}>
       <button className={pestana === 'HORARIO' ? 'btn-primary' : 'btn-secondary'} onClick={() => setPestana('HORARIO')}>Mi horario</button>
-      <button className={pestana === 'NOTIFICACIONES' ? 'btn-primary' : 'btn-secondary'} onClick={() => setPestana('NOTIFICACIONES')}>Notificaciones{notificaciones.some((n) => !n.leida) ? ` (${notificaciones.filter((n) => !n.leida).length})` : ''}</button>
     </nav>
-    {pestana === 'NOTIFICACIONES' ? <section aria-label="Notificaciones de obras">
-      <h1>Notificaciones</h1>
-      {notificaciones.length ? notificaciones.map((n) => <article key={n.id} style={{ padding: '1rem', marginBottom: '.75rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
-        <strong>{n.obra_codigo} · {n.obra_nombre}</strong>
-        <p>La obra fue {({ CANCELADA: 'cancelada', SUSPENDIDA: 'suspendida', FINALIZADA: 'finalizada' })[n.estado_codigo] || n.estado_descripcion}.</p>
-        <small>{new Date(n.creada_en).toLocaleString('es-CL')}</small>
-      </article>) : <p>No tienes notificaciones.</p>}
-    </section> : <>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
       <div><h1 style={{ marginBottom: '.25rem' }}>Mi horario</h1><p style={{ color: 'var(--text-muted)', margin: 0 }}>Obras y turnos que te asignaron</p></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}><button className="btn-secondary" onClick={() => cambiarSemana(-1)}>← Semana anterior</button><strong>{semana.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' })}</strong><button className="btn-secondary" onClick={() => cambiarSemana(1)}>Semana siguiente →</button></div>
       {aviso && (
-      <p role={aviso.tipo === 'error' ? 'alert' : 'status'}
-      style={{ color: aviso.tipo === 'error' ? 'var(--danger, #b91c1c)' : 'var(--success, #15803d)', marginBottom: '1rem' }}>
-      {aviso.texto}
-      </p>
-)}
+        <p role={aviso.tipo === 'error' ? 'alert' : 'status'}
+          style={{ color: aviso.tipo === 'error' ? 'var(--danger, #b91c1c)' : 'var(--success, #15803d)', marginBottom: '1rem' }}>
+          {aviso.texto}
+        </p>
+      )}
     </div>
     <section aria-label="Leyenda de colores del horario" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '.75rem', marginBottom: '1rem' }}>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '.85rem 1rem' }}>
@@ -185,7 +176,7 @@ export default function VistaTecnico() {
           />
           <strong>{obra.hora_inicio.slice(0, 5)}–{obra.hora_termino.slice(0, 5)}</strong>
           <div className="horario-card-title">{obra.obra_codigo} · {obra.obra_nombre}</div>
-                    <small>{obra.ubicacion_faena}</small>
+          <small>{obra.ubicacion_faena}</small>
 
           {obra.especificaciones_lugar && (
             <small
@@ -228,6 +219,5 @@ export default function VistaTecnico() {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}><button type="button" className="btn-secondary" onClick={() => setSolicitudObra(null)}>Cancelar</button><button type="submit" className="btn-primary" disabled={enviandoSolicitud}>{enviandoSolicitud ? 'Enviando…' : 'Enviar solicitud'}</button></div>
       </form>
     </div>}
-    </>}
   </main>;
 }

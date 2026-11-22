@@ -95,6 +95,16 @@ export const obrasService = {
     return response.data;
   },
 
+  async marcarNotificacionTecnicoLeida(id) {
+    const response = await api.post(`/obras/fyag/v1/notificaciones-tecnico/${id}/marcar-leida/`);
+    return response.data;
+  },
+
+  async marcarTodasNotificacionesTecnicoLeidas() {
+    const response = await api.post('/obras/fyag/v1/notificaciones-tecnico/marcar-todas-leidas/');
+    return response.data;
+  },
+
   async getSolicitudesCambio() {
     const response = await api.get('/obras/fyag/v1/solicitudes-cambio-obra/');
     return response.data;

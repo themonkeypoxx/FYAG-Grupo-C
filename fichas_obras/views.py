@@ -53,7 +53,7 @@ from fyag_mongoDB.servicio_maquinarias import (
 
 def notificar_tecnicos_de_obra(obra, estado_codigo):
     """Guarda un aviso para cada técnico con asignaciones activas en la obra."""
-    if estado_codigo not in {"CANCELADA", "SUSPENDIDA", "FINALIZADA"}:
+    if estado_codigo not in {"CANCELADA", "SUSPENDIDA", "FINALIZADA", "EJECUCION"}:
         return
     tecnico_ids = AsignacionTecnico.objects.filter(
         obra=obra, activo=True
@@ -489,11 +489,25 @@ class AsignacionTecnicoViewSet(viewsets.ModelViewSet):
 
 
 class NotificacionTecnicoViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [EsTecnico]
+    permission_classes = [EsTecnico | EsGerencial | EsSupervisor]
     serializer_class = NotificacionTecnicoSerializer
 
     def get_queryset(self):
         return NotificacionTecnico.objects.filter(tecnico=self.request.user).select_related("obra", "obra__estado_obra")
+
+    @action(detail=True, methods=["post"], url_path="marcar-leida")
+    def marcar_leida(self, request, pk=None):
+        notif = self.get_object()
+        notif.leida = True
+        notif.save(update_fields=["leida"])
+        return Response({"mensaje": "Notificación marcada como leída.", "id": notif.id})
+
+    @action(detail=False, methods=["post"], url_path="marcar-todas-leidas")
+    def marcar_todas_leidas(self, request):
+        actualizadas = NotificacionTecnico.objects.filter(
+            tecnico=request.user, leida=False
+        ).update(leida=True)
+        return Response({"mensaje": f"{actualizadas} notificaciones marcadas como leídas."})
 
 
 class SolicitudCambioObraViewSet(viewsets.ModelViewSet):
