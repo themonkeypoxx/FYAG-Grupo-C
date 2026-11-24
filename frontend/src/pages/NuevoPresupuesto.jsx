@@ -1,28 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import presupuestosService from '../Servicios/presupuestosService';
+import obrasService from '../Servicios/obrasService';
+import usuariosService from '../Servicios/usuariosService';
 import authService from '../Servicios/authService';
 
 export default function NuevoPresupuesto() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  //El Administrativo vuelve a su panel y el resto al dashboard de obras.
+  // El Administrativo vuelve a su panel y el resto al dashboard de obras.
   const rutaVolver = authService.tieneRol('Administrativo') && !authService.tieneRol('Gerencial')
     ? '/vista-administrativo'
     : '/dashboard-obras';
 
-  const [obrasActivas, setObrasActivas] = useState([]);
-  const [cargandoObras, setCargandoObras] = useState(true);
+  const [clientes, setClientes] = useState([]);
+  const [tiposServicio, setTiposServicio] = useState([]);
+  const [supervisores, setSupervisores] = useState([]);
+  const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
 
-  const [obraSeleccionada, setObraSeleccionada] = useState(null);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [formData, setFormData] = useState({
-    obra: '',
+    cliente: '',
+    nombre_proyecto: '',
+    tipo_servicio: '',
+    ubicacion_faena: '',
+    fecha_estimada_inicio: '',
+    fecha_estimada_termino: '',
+    supervisor_asignado: '',
     numero_presupuesto: '',
     subtotal: '',
-    estado_presupuesto: 'Borrador',
+    estado_presupuesto: 'Pendiente_Aprobacion',
   });
 
   const [calculos, setCalculos] = useState({
@@ -30,38 +40,61 @@ export default function NuevoPresupuesto() {
     total: 0,
   });
 
-  // Cargar proyectos (obras) activos
+  // Cargar catálogos iniciales: Clientes activos, Tipos de servicio y Supervisores
   useEffect(() => {
-    async function cargarObras() {
+    async function cargarCatalogos() {
       try {
-        setCargandoObras(true);
-        const data = await presupuestosService.getObrasActivas();
-        setObrasActivas(data);
+        setCargandoCatalogos(true);
+        setError(null);
 
-        // Preseleccionar obra si vino por navegación o primera disponible
-        const obraPreviaId = location.state?.obraId;
-        const encontrada = data.find((o) => o.id_obra === obraPreviaId) || data[0];
+        const [clientesData, tiposData, usuariosData] = await Promise.all([
+          obrasService.getClientes(),
+          obrasService.getTiposServicio(),
+          usuariosService.listar().catch(() => []),
+        ]);
 
-        if (encontrada) {
-          setFormData((prev) => ({ ...prev, obra: encontrada.id_obra }));
-          setObraSeleccionada(encontrada);
+        // Filtrar clientes activos
+        const clientesActivos = (clientesData || []).filter(
+          (c) => !c.soft_deleted && (c.estado_cliente === 'Activo' || !c.estado_cliente)
+        );
+        setClientes(clientesActivos);
+
+        setTiposServicio(tiposData || []);
+
+        // Filtrar usuarios con rol Supervisor
+        const listaSupervisores = (usuariosData || []).filter((u) => {
+          const roles = Array.isArray(u.roles) ? u.roles.map((r) => String(r).toUpperCase()) : [];
+          return roles.includes('SUPERVISOR') || String(u.rol).toUpperCase() === 'SUPERVISOR';
+        });
+        setSupervisores(listaSupervisores.length > 0 ? listaSupervisores : usuariosData || []);
+
+        // Preseleccionar primer cliente si está disponible
+        if (clientesActivos.length > 0) {
+          const primerCliente = clientesActivos[0];
+          setFormData((prev) => ({
+            ...prev,
+            cliente: primerCliente.id_cliente,
+            tipo_servicio: tiposData?.[0]?.id_tipo_servicio || '',
+          }));
+          setClienteSeleccionado(primerCliente);
         }
       } catch (err) {
-        console.error('Error al cargar obras activas:', err);
-        setError('No se pudieron cargar los proyectos activos del servidor.');
+        console.error('Error al cargar catálogos para presupuesto:', err);
+        setError('No se pudieron cargar los datos necesarios desde el servidor.');
       } finally {
-        setCargandoObras(false);
+        setCargandoCatalogos(false);
       }
     }
-    cargarObras();
-  }, [location.state]);
 
-  // Actualizar obra seleccionada y validar cliente vinculado
-  const handleObraChange = (e) => {
-    const obraId = e.target.value;
-    const obra = obrasActivas.find((o) => o.id_obra === obraId) || null;
-    setFormData((prev) => ({ ...prev, obra: obraId }));
-    setObraSeleccionada(obra);
+    cargarCatalogos();
+  }, []);
+
+  // Manejo de selección de Cliente
+  const handleClienteChange = (e) => {
+    const clienteId = e.target.value;
+    const cliente = clientes.find((c) => String(c.id_cliente) === String(clienteId)) || null;
+    setFormData((prev) => ({ ...prev, cliente: clienteId }));
+    setClienteSeleccionado(cliente);
     setError(null);
   };
 
@@ -96,13 +129,18 @@ export default function NuevoPresupuesto() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.obra) {
-      setError('Debe seleccionar un proyecto u obra activa.');
+    if (!formData.cliente) {
+      setError('Debe seleccionar un cliente activo.');
+      return;
+    }
+
+    if (!formData.nombre_proyecto.trim()) {
+      setError('Debe ingresar el nombre del proyecto u obra a presupuestar.');
       return;
     }
 
     if (!formData.subtotal || parseFloat(formData.subtotal) <= 0) {
-      setError('Debe ingresar un subtotal válido mayor a 0.');
+      setError('Debe ingresar un monto subtotal válido mayor a 0.');
       return;
     }
 
@@ -111,7 +149,13 @@ export default function NuevoPresupuesto() {
       setError(null);
 
       const payload = {
-        obra: formData.obra,
+        cliente: formData.cliente,
+        nombre_proyecto: formData.nombre_proyecto.trim(),
+        tipo_servicio: formData.tipo_servicio || null,
+        ubicacion_faena: formData.ubicacion_faena.trim(),
+        fecha_estimada_inicio: formData.fecha_estimada_inicio || null,
+        fecha_estimada_termino: formData.fecha_estimada_termino || null,
+        supervisor_asignado: formData.supervisor_asignado || null,
         subtotal: formData.subtotal,
         estado_presupuesto: formData.estado_presupuesto,
       };
@@ -126,7 +170,7 @@ export default function NuevoPresupuesto() {
         state: {
           notificacion: {
             tipo: 'exito',
-            mensaje: `Presupuesto '${respuesta.numero_presupuesto}' registrado exitosamente para el cliente ${respuesta.cliente_razon_social || ''}.`,
+            mensaje: `Presupuesto '${respuesta.numero_presupuesto}' creado exitosamente. Se notificó a Gerencia para su aprobación.`,
           },
         },
       });
@@ -152,12 +196,12 @@ export default function NuevoPresupuesto() {
 
   return (
     <div className="main-content">
-      <div className="form-card" style={{ maxWidth: '780px' }}>
+      <div className="form-card" style={{ maxWidth: '820px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <div>
             <h2>Registrar Nuevo Presupuesto</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '-0.75rem' }}>
-              Vinculación de presupuesto formal a cliente y proyecto activo
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '-0.5rem' }}>
+              El presupuesto será enviado a Gerencia para su aprobación antes de generar la Obra y habilitar su facturación.
             </p>
           </div>
           <Link to={rutaVolver} className="btn-secondary" style={{ textDecoration: 'none' }}>
@@ -181,171 +225,264 @@ export default function NuevoPresupuesto() {
           </div>
         )}
 
-        {cargandoObras ? (
+        {cargandoCatalogos ? (
           <div style={{ textAlign: 'center', padding: '2rem' }}>
-            <p>Cargando proyectos activos...</p>
+            <p>Cargando información del sistema...</p>
           </div>
-        ) : obrasActivas.length === 0 ? (
+        ) : clientes.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem' }}>
             <p style={{ color: 'var(--text-muted)' }}>
-              No hay proyectos activos disponibles para presupuestar actualmente.
+              No existen clientes activos registrados para generar presupuestos.
             </p>
-            <Link to="/nueva-obra" className="btn-primary" style={{ marginTop: '1rem' }}>
-              + Crear Nueva Obra
+            <Link to="/panel-administrativo" className="btn-primary" style={{ marginTop: '1rem', display: 'inline-block' }}>
+              Ir a Administración de Clientes
             </Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
-            {/* Selección de Proyecto Activo */}
-            <div className="form-group">
-              <label htmlFor="obra">
-                Proyecto Activo <span style={{ color: '#dc2626' }}>*</span>
-              </label>
-              <select
-                id="obra"
-                name="obra"
-                className="form-control"
-                value={formData.obra}
-                onChange={handleObraChange}
-                required
-              >
-                {obrasActivas.map((obra) => (
-                  <option key={obra.id_obra} value={obra.id_obra}>
-                    {obra.codigo_obra} — {obra.nombre_obra} ({obra.estado_obra_descripcion || obra.estado_obra_codigo})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Sección 1: Cliente y Datos del Proyecto */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.05rem', marginBottom: '0.75rem', color: 'var(--primary)' }}>
+                1. Cliente y Datos del Proyecto
+              </h3>
 
-            {/* Tarjeta Informativa del Cliente Vinculado */}
-            {obraSeleccionada && (
-              <div
-                style={{
-                  background: 'var(--bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  padding: '1rem',
-                  marginBottom: '1.25rem',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>
-                      Cliente Vinculado al Proyecto
-                    </span>
-                    <h4 style={{ margin: '0.25rem 0 0 0', color: 'var(--text-main)', fontSize: '1rem' }}>
-                      🏢 {obraSeleccionada.cliente_razon_social || 'Cliente no identificado'}
-                    </h4>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      RUT: {obraSeleccionada.cliente_rut || 'Sin RUT'}
-                    </span>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        background: '#dcfce7',
-                        color: '#166534',
-                        padding: '0.25rem 0.6rem',
-                        borderRadius: '12px',
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                      }}
-                    >
-                      ● Proyecto Activo
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="form-grid">
-              {/* Número de Presupuesto */}
               <div className="form-group">
-                <label htmlFor="numero_presupuesto">Número de Presupuesto (Opcional)</label>
-                <input
-                  type="text"
-                  id="numero_presupuesto"
-                  name="numero_presupuesto"
-                  className="form-control"
-                  placeholder="Autogenerado ej: PRE-OBRA-XXXX"
-                  value={formData.numero_presupuesto}
-                  onChange={handleChange}
-                />
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Dejar en blanco para asignación automática única.
-                </span>
-              </div>
-
-              {/* Estado del Presupuesto */}
-              <div className="form-group">
-                <label htmlFor="estado_presupuesto">Estado Inicial</label>
+                <label htmlFor="cliente">
+                  Cliente <span style={{ color: '#dc2626' }}>*</span>
+                </label>
                 <select
-                  id="estado_presupuesto"
-                  name="estado_presupuesto"
+                  id="cliente"
+                  name="cliente"
                   className="form-control"
-                  value={formData.estado_presupuesto}
-                  onChange={handleChange}
+                  value={formData.cliente}
+                  onChange={handleClienteChange}
+                  required
                 >
-                  <option value="Borrador">Borrador</option>
-                  <option value="Pendiente_Aprobacion">Pendiente de Aprobación</option>
+                  {clientes.map((c) => (
+                    <option key={c.id_cliente} value={c.id_cliente}>
+                      {c.razon_social} — RUT: {c.rut_empresa}
+                    </option>
+                  ))}
                 </select>
               </div>
+
+              {clienteSeleccionado && (
+                <div
+                  style={{
+                    background: 'var(--bg, #f8fafc)',
+                    border: '1px solid var(--border, #e2e8f0)',
+                    borderRadius: '8px',
+                    padding: '0.85rem 1rem',
+                    marginBottom: '1rem',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  <strong>🏢 {clienteSeleccionado.razon_social}</strong> · RUT: {clienteSeleccionado.rut_empresa}
+                  {clienteSeleccionado.direccion && <span> · Dirección: {clienteSeleccionado.direccion}</span>}
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="nombre_proyecto">
+                  Nombre del Proyecto / Trabajo <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  id="nombre_proyecto"
+                  name="nombre_proyecto"
+                  className="form-control"
+                  placeholder="Ej: Mantención Preventiva Climatización Edificio Corporativo"
+                  value={formData.nombre_proyecto}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label htmlFor="tipo_servicio">
+                    Tipo de Servicio <span style={{ color: '#dc2626' }}>*</span>
+                  </label>
+                  <select
+                    id="tipo_servicio"
+                    name="tipo_servicio"
+                    className="form-control"
+                    value={formData.tipo_servicio}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Seleccione tipo de servicio</option>
+                    {tiposServicio.map((t) => (
+                      <option key={t.id_tipo_servicio} value={t.id_tipo_servicio}>
+                        {t.nombre_servicio} ({t.codigo})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="ubicacion_faena">Ubicación / Dirección de la Faena</label>
+                  <input
+                    type="text"
+                    id="ubicacion_faena"
+                    name="ubicacion_faena"
+                    className="form-control"
+                    placeholder="Ej: Av. Las Condes 1234, Santiago"
+                    value={formData.ubicacion_faena}
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Subtotal y Cálculo de IVA / Total */}
-            <div className="form-group" style={{ marginTop: '0.5rem' }}>
-              <label htmlFor="subtotal">
-                Monto Subtotal ($ CLP, Neto sin IVA) <span style={{ color: '#dc2626' }}>*</span>
-              </label>
-              <input
-                type="number"
-                id="subtotal"
-                name="subtotal"
-                className="form-control"
-                placeholder="Ej: 1500000"
-                min="1"
-                step="1"
-                value={formData.subtotal}
-                onChange={handleSubtotalChange}
-                required
-              />
+            {/* Sección 2: Planificación y Supervisión */}
+            <div style={{ marginBottom: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.05rem', marginBottom: '0.75rem', color: 'var(--primary)' }}>
+                2. Planificación y Supervisión (Preliminar)
+              </h3>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label htmlFor="fecha_estimada_inicio">Fecha Estimada de Inicio</label>
+                  <input
+                    type="date"
+                    id="fecha_estimada_inicio"
+                    name="fecha_estimada_inicio"
+                    className="form-control"
+                    value={formData.fecha_estimada_inicio}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="fecha_estimada_termino">Fecha Estimada de Término</label>
+                  <input
+                    type="date"
+                    id="fecha_estimada_termino"
+                    name="fecha_estimada_termino"
+                    className="form-control"
+                    value={formData.fecha_estimada_termino}
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="supervisor_asignado">Supervisor a Cargo (Opcional)</label>
+                <select
+                  id="supervisor_asignado"
+                  name="supervisor_asignado"
+                  className="form-control"
+                  value={formData.supervisor_asignado}
+                  onChange={handleChange}
+                >
+                  <option value="">Seleccionar Supervisor (opcional)</option>
+                  {supervisores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.first_name || s.last_name
+                        ? `${s.first_name} ${s.last_name} (${s.username})`
+                        : s.username}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Si no se especifica, el supervisor se asignará al momento de la aprobación.
+                </span>
+              </div>
             </div>
 
-            {/* Resumen de Valores Financieros */}
-            <div
-              style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '1rem',
-                margin: '1.25rem 0',
-              }}
-            >
-              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#334155' }}>
-                Resumen de Liquidación
-              </h4>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '0.35rem' }}>
-                <span style={{ color: '#64748b' }}>Subtotal Neto:</span>
-                <strong style={{ color: '#0f172a' }}>{formatearCLP(formData.subtotal)}</strong>
+            {/* Sección 3: Costos y Estado del Presupuesto */}
+            <div style={{ marginBottom: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.05rem', marginBottom: '0.75rem', color: 'var(--primary)' }}>
+                3. Costos y Formalización
+              </h3>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label htmlFor="numero_presupuesto">Número de Presupuesto (Opcional)</label>
+                  <input
+                    type="text"
+                    id="numero_presupuesto"
+                    name="numero_presupuesto"
+                    className="form-control"
+                    placeholder="Autogenerado ej: PRE-2026-XXXX"
+                    value={formData.numero_presupuesto}
+                    onChange={handleChange}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Dejar en blanco para correlativo automático único.
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="estado_presupuesto">Estado Inicial</label>
+                  <select
+                    id="estado_presupuesto"
+                    name="estado_presupuesto"
+                    className="form-control"
+                    value={formData.estado_presupuesto}
+                    onChange={handleChange}
+                  >
+                    <option value="Pendiente_Aprobacion">Pendiente de Aprobación (Enviar a Gerencia)</option>
+                    <option value="Borrador">Borrador</option>
+                  </select>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '0.35rem' }}>
-                <span style={{ color: '#64748b' }}>IVA (19%):</span>
-                <strong style={{ color: '#0f172a' }}>{formatearCLP(calculos.iva)}</strong>
+
+              <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                <label htmlFor="subtotal">
+                  Monto Subtotal ($ CLP, Neto sin IVA) <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  id="subtotal"
+                  name="subtotal"
+                  className="form-control"
+                  placeholder="Ej: 1500000"
+                  min="1"
+                  step="1"
+                  value={formData.subtotal}
+                  onChange={handleSubtotalChange}
+                  required
+                />
               </div>
+
+              {/* Resumen de Liquidación */}
               <div
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '1.05rem',
-                  borderTop: '1px solid #cbd5e1',
-                  paddingTop: '0.5rem',
-                  marginTop: '0.5rem',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  margin: '1.25rem 0',
                 }}
               >
-                <span style={{ fontWeight: 700, color: '#1e293b' }}>Total Presupuesto:</span>
-                <strong style={{ fontWeight: 800, color: 'var(--primary)' }}>
-                  {formatearCLP(calculos.total)}
-                </strong>
+                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#334155' }}>
+                  Resumen de Liquidación
+                </h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '0.35rem' }}>
+                  <span style={{ color: '#64748b' }}>Subtotal Neto:</span>
+                  <strong style={{ color: '#0f172a' }}>{formatearCLP(formData.subtotal)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '0.35rem' }}>
+                  <span style={{ color: '#64748b' }}>IVA (19%):</span>
+                  <strong style={{ color: '#0f172a' }}>{formatearCLP(calculos.iva)}</strong>
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '1.05rem',
+                    borderTop: '1px solid #cbd5e1',
+                    paddingTop: '0.5rem',
+                    marginTop: '0.5rem',
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: '#1e293b' }}>Total Presupuesto:</span>
+                  <strong style={{ fontWeight: 800, color: 'var(--primary)' }}>
+                    {formatearCLP(calculos.total)}
+                  </strong>
+                </div>
               </div>
             </div>
 

@@ -9,7 +9,12 @@ from .servicio_maquinarias import (
     asignar_maquina_a_obra,
     liberar_maquina
 )
-from .servicios import registrar_evento
+from .servicios import (registrar_evento, consultar_auditoria)
+
+#tuve q importar los permisos d usuario pal log -ismael!
+
+from rest_framework.permissions import IsAuthenticated
+from fichas_obras.permissions import EsGerencial
 
 class MaquinariaCatalogView(APIView):
     def get(self, request):
@@ -44,3 +49,37 @@ class DashboardMongoAgregacionView(APIView):
     def get(self, request):
         datos = obtener_agregacion_dashboard_mongo()
         return Response(datos)
+
+
+##########
+
+
+class AuditoriaLogsListView(APIView):
+    permission_classes = [IsAuthenticated, EsGerencial]
+
+    def get(self, request):
+        try:
+            limite = int(request.query_params.get('limite', request.query_params.get('por_pagina', 50)))
+            salto = int(request.query_params.get('salto', request.query_params.get('saltar', 0)))
+            pagina = int(request.query_params.get('pagina', 1))
+            if salto > 0 and limite > 0:
+                pagina = (salto // limite) + 1
+
+            accion = request.query_params.get('accion', None)
+            usuario = request.query_params.get('usuario', None)
+
+            datos = consultar_auditoria(
+                usuario=usuario,
+                accion=accion,
+                pagina=pagina,
+                por_pagina=limite,
+            )
+            if "registros" not in datos and "resultados" in datos:
+                datos["registros"] = datos["resultados"]
+
+            return Response(datos, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"error": f"Error al consultar auditoría!: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

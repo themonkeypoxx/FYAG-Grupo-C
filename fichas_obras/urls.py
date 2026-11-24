@@ -18,6 +18,7 @@ router.register("obras-asignadas", ObrasAsignadasViewSet, basename="obras-asigna
 router.register("asignaciones-tecnico", AsignacionTecnicoViewSet, basename="asignacion-tecnico")
 router.register("solicitudes-cambio-obra", SolicitudCambioObraViewSet, basename="solicitud-cambio-obra")
 router.register("notificaciones-tecnico", NotificacionTecnicoViewSet, basename="notificacion-tecnico")
+router.register("notificaciones-presupuesto", NotificacionPresupuestoViewSet, basename="notificacion-presupuesto")
 router.register("presupuestos", PresupuestoViewSet, basename="presupuesto")
 router.register("items-presupuesto", ItemPresupuestoViewSet, basename="item-presupuesto")
 router.register("facturas", FacturaViewSet, basename="factura")

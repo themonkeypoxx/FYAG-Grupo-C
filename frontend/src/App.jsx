@@ -11,6 +11,7 @@ import ResumenFinanciero from './pages/ResumenFinanciero';
 import GestionUsuarios from './pages/GestionUsuarios';
 import AccesoDenegado from './pages/AccesoDenegado';
 import RutaProtegida from './Servicios/RutaProtegida';
+import Tabla_Aud from './components/Tabla_Aud';
 import './App.css';
 
 function Layout() {
@@ -38,12 +39,9 @@ function Layout() {
           path="/auditoria"
           element={
             <RutaProtegida roles={['Gerencial']}>
-              <div className="main-content" style={{ textAlign: 'center', padding: '3rem' }}>
-                <h2>Registro de Auditoría</h2>
-                <p style={{ color: 'var(--text-muted)' }}>
-                  Módulo de auditoría (confidencial - solo Gerencia).
-                </p>
-              </div>
+              <main className="main-content">
+                <Tabla_Aud />
+              </main>
             </RutaProtegida>
           }
         />

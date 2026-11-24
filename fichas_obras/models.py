@@ -242,11 +242,29 @@ class Presupuesto(models.Model):
     obra = models.ForeignKey(
         Obra, on_delete=models.PROTECT,
         db_column="id_obra", related_name="presupuestos",
+        null=True, blank=True #Se hizo cambio para cambiar el flujo de obras propuesto 23/11- Ismael
+
     )
     cliente = models.ForeignKey(
         Cliente, on_delete=models.PROTECT,
         db_column="id_cliente", related_name="presupuestos",
     )
+
+    nombre_proyecto = models.CharField(max_length=200, default="")
+    tipo_servicio = models.ForeignKey(
+        TipoServicio, on_delete=models.PROTECT,
+        null=True, blank=True
+    )
+
+    ubicacion_faena = models.CharField(max_length=200, default="")
+    supervisor_asignado = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="presupuestos_supervisados"
+    )
+
+    fecha_estimada_inicio = models.DateField(null=True, blank=True)
+    fecha_estimada_termino = models.DateField(null=True, blank=True)
+
     creador = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         db_column="id_creador", related_name="presupuestos_creados",
@@ -283,6 +301,44 @@ class Presupuesto(models.Model):
  
     def __str__(self):
         return f"{self.numero_presupuesto} ({self.estado_presupuesto})"
+
+
+# ---------------------------------------------------------------------------
+# Notificaciones de presupuestos para el Gerente
+# ---------------------------------------------------------------------------
+class NotificacionPresupuesto(models.Model):
+    class TipoEvento(models.TextChoices):
+        CREADO = "CREADO", "Presupuesto Creado"
+        PENDIENTE = "PENDIENTE", "Pendiente de Aprobación"
+        APROBADO = "APROBADO", "Presupuesto Aprobado"
+        RECHAZADO = "RECHAZADO", "Presupuesto Rechazado"
+
+    id = models.AutoField(primary_key=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notificaciones_presupuesto",
+    )
+    presupuesto = models.ForeignKey(
+        Presupuesto,
+        on_delete=models.CASCADE,
+        related_name="notificaciones",
+    )
+    tipo = models.CharField(
+        max_length=30,
+        choices=TipoEvento.choices,
+        default=TipoEvento.CREADO,
+    )
+    mensaje = models.CharField(max_length=255)
+    creada_en = models.DateTimeField(default=timezone.now)
+    leida = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "notificacion_presupuesto"
+        ordering = ["-creada_en"]
+
+    def __str__(self):
+        return f"{self.tipo} - {self.presupuesto.numero_presupuesto} -> {self.usuario.username}"
  
  
 # ---------------------------------------------------------------------------

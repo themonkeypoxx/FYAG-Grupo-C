@@ -48,11 +48,6 @@ def registrar_evento(request, accion, recurso, recurso_id, detalles=None):
         logger.error(f"Error al registrar auditoría en MongoDB: {err}")
         
 def obtener_agregacion_dashboard_mongo():
-    """
-    Pipeline de agregación en MongoDB para métricas operativas en tiempo real:
-    - Estado actual del parque de maquinarias ($group)
-    - Actividad reciente de auditoría en las últimas 24 horas ($match + $group)
-    """
     inicializar_catalogo_maquinarias()
     hace_24h = datetime.now(timezone.utc) - timedelta(hours=24)
 
@@ -77,3 +72,74 @@ def obtener_agregacion_dashboard_mongo():
         "maquinarias_por_estado": maquinarias_agg,
         "actividad_reciente_24h": actividad_agg,
     }
+
+
+def consultar_auditoria(
+    usuario=None,
+    accion=None,
+    recurso=None,
+    recurso_id=None,
+    desde=None,
+    hasta=None,
+    pagina=1,
+    por_pagina=50,
+):
+    filtro = {}
+
+    if usuario:
+        filtro["metadata.usuario"] = usuario
+    if accion:
+        filtro["metadata.accion"] = accion
+    if recurso:
+        filtro["metadata.recurso"] = recurso
+    if recurso_id is not None:
+        filtro["metadata.recurso_id"] = str(recurso_id)
+
+    if desde or hasta:
+        rango = {}
+        if desde:
+            rango["$gte"] = desde
+        if hasta:
+            rango["$lte"] = hasta
+        filtro["timestamp"] = rango
+    #max sirve para q la pagina no sea menor q uno, nada más
+    pagina = max(int(pagina), 1)
+    por_pagina = min(max(int(por_pagina), 1), 100) #esto es para poner el limite en 100 y el menor en 1
+    saltar = (pagina - 1) * por_pagina
+
+    try:
+        total = audit_logs_collection.count_documents(filtro)
+
+        cursor = (
+            audit_logs_collection.find(filtro)
+            .sort("timestamp", -1)    #lo mas reciente primero
+            .skip(saltar)
+            .limit(por_pagina)
+        )
+
+        resultados = []
+        for doc in cursor:
+            meta = doc.get("metadata", {})
+            resultados.append({
+                "id": str(doc["_id"]),
+                "timestamp": doc["timestamp"].isoformat(),
+                "usuario_id": meta.get("usuario_id"),
+                "usuario": meta.get("usuario"),
+                "accion": meta.get("accion"),
+                "recurso": meta.get("recurso"),
+                "recurso_id": meta.get("recurso_id"),
+                "ip": meta.get("ip"),
+                "detalles": doc.get("detalles", {}),
+            })
+
+        return {
+            "total": total,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total_paginas": (total + por_pagina - 1) // por_pagina,
+            "resultados": resultados,
+        }
+    except Exception as err:
+        logger.error(f"Error al consultar auditoría en MongoDB: {err}")
+        return {"total": 0, "pagina": pagina, "por_pagina": por_pagina,
+                "total_paginas": 0, "resultados": []}

@@ -12,7 +12,7 @@ maquinarias_collection = audit_db['maquinarias']
 NOMBRE_COLECCION = 'logs_auditoria'
 audit_logs_collection = audit_db[NOMBRE_COLECCION]
 
-coleccion_inicializada = False
+_coleccion_inicializada = False
 
 def asegurar_coleccion_timeseries():
     global _coleccion_inicializada
@@ -39,10 +39,6 @@ def get_audit_collection():
 
 
 
-####### Simulación de catálogo d maquinarias
-####### al final decidí implementarlo, despues en el informe solo
-####### debemos justificar el cambio del registro de auditoría a MongoDB
-#     (lo haré yo) - Ismael
 
 def inicializar_catalogo_maquinarias():
     if maquinarias_collection.count_documents({}) == 0:
