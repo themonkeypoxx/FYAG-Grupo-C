@@ -242,11 +242,29 @@ class Presupuesto(models.Model):
     obra = models.ForeignKey(
         Obra, on_delete=models.PROTECT,
         db_column="id_obra", related_name="presupuestos",
+        null=True, blank=True #Se hizo cambio para cambiar el flujo de obras propuesto 23/11- Ismael
+
     )
     cliente = models.ForeignKey(
         Cliente, on_delete=models.PROTECT,
         db_column="id_cliente", related_name="presupuestos",
     )
+
+    nombre_proyecto = models.CharField(max_length=200, default="")
+    tipo_servicio = models.ForeignKey(
+        TipoServicio, on_delete=models.PROTECT,
+        null=True, blank=True
+    )
+
+    ubicacion_faena = models.CharField(max_length=200, default="")
+    supervisor_asignado = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="presupuestos_supervisados"
+    )
+
+    fecha_estimada_inicio = models.DateField(null=True, blank=True)
+    fecha_estimada_termino = models.DateField(null=True, blank=True)
+
     creador = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         db_column="id_creador", related_name="presupuestos_creados",

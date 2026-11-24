@@ -225,9 +225,9 @@ class NotificacionPresupuestoSerializer(serializers.ModelSerializer):
     presupuesto_subtotal = serializers.DecimalField(source="presupuesto.subtotal", max_digits=14, decimal_places=2, read_only=True)
     presupuesto_iva = serializers.DecimalField(source="presupuesto.monto_iva", max_digits=14, decimal_places=2, read_only=True)
     presupuesto_estado = serializers.CharField(source="presupuesto.estado_presupuesto", read_only=True)
-    obra_id = serializers.CharField(source="presupuesto.obra_id", read_only=True)
-    obra_codigo = serializers.CharField(source="presupuesto.obra.codigo_obra", read_only=True)
-    obra_nombre = serializers.CharField(source="presupuesto.obra.nombre_obra", read_only=True)
+    obra_id = serializers.CharField(source="presupuesto.obra_id", read_only=True, default="")
+    obra_codigo = serializers.CharField(source="presupuesto.obra.codigo_obra", read_only=True, default="")
+    obra_nombre = serializers.CharField(source="presupuesto.obra.nombre_obra", read_only=True, default="")
     cliente_nombre = serializers.CharField(source="presupuesto.cliente.razon_social", read_only=True)
     cliente_rut = serializers.CharField(source="presupuesto.cliente.rut_empresa", read_only=True)
     creador_nombre = serializers.SerializerMethodField()
@@ -313,9 +313,11 @@ class SolicitudCambioObraSerializer(serializers.ModelSerializer):
 class PresupuestoSerializer(serializers.ModelSerializer):
     cliente_razon_social = serializers.CharField(source="cliente.razon_social", read_only=True)
     cliente_rut = serializers.CharField(source="cliente.rut_empresa", read_only=True)
-    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True)
-    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True)
-    obra_estado = serializers.CharField(source="obra.estado_obra.descripcion", read_only=True)
+    obra_codigo = serializers.CharField(source="obra.codigo_obra", read_only=True, default="")
+    obra_nombre = serializers.CharField(source="obra.nombre_obra", read_only=True, default="")
+    obra_estado = serializers.CharField(source="obra.estado_obra.descripcion", read_only=True, default="")
+    tipo_servicio_nombre = serializers.CharField(source="tipo_servicio.nombre_servicio", read_only=True, default="")
+    supervisor_nombre = serializers.SerializerMethodField()
     creador_nombre = serializers.SerializerMethodField()
     aprobador_gerencia_nombre = serializers.SerializerMethodField()
 
@@ -330,9 +332,16 @@ class PresupuestoSerializer(serializers.ModelSerializer):
             "soft_deleted",
         ]
         extra_kwargs = {
+            "obra": {"required": False, "allow_null": True},
             "cliente": {"required": False},
             "numero_presupuesto": {"required": False},
         }
+
+    def get_supervisor_nombre(self, obj):
+        if not obj.supervisor_asignado:
+            return ""
+        full = obj.supervisor_asignado.get_full_name()
+        return full if full else obj.supervisor_asignado.username
 
     def get_creador_nombre(self, obj):
         if not obj.creador:
@@ -350,43 +359,46 @@ class PresupuestoSerializer(serializers.ModelSerializer):
         obra = attrs.get("obra") or (self.instance.obra if self.instance else None)
         cliente = attrs.get("cliente") or (self.instance.cliente if self.instance else None)
 
-        if not obra:
-            raise serializers.ValidationError({"obra": "Debe vincular el presupuesto a un proyecto u obra."})
+        # 1. Si se asocia a una obra existente (flujo anterior o complementario)
+        if obra:
+            if obra.soft_deleted:
+                raise serializers.ValidationError({"obra": "El proyecto seleccionado ha sido eliminado o no está disponible."})
 
-        # 1. Validación de proyecto activo
-        if obra.soft_deleted:
-            raise serializers.ValidationError({"obra": "El proyecto seleccionado ha sido eliminado o no está disponible."})
+            codigo_estado = obra.estado_obra.codigo_estado.upper() if obra.estado_obra else ""
+            if codigo_estado in ["FINALIZADA", "CANCELADA"]:
+                desc_estado = obra.estado_obra.descripcion if obra.estado_obra else codigo_estado
+                raise serializers.ValidationError({
+                    "obra": f"No se puede registrar un presupuesto para un proyecto inactivo (estado actual: {desc_estado})."
+                })
 
-        codigo_estado = obra.estado_obra.codigo_estado.upper() if obra.estado_obra else ""
-        if codigo_estado in ["FINALIZADA", "CANCELADA"]:
-            desc_estado = obra.estado_obra.descripcion if obra.estado_obra else codigo_estado
-            raise serializers.ValidationError({
-                "obra": f"No se puede registrar un presupuesto para un proyecto inactivo (estado actual: {desc_estado})."
-            })
-
-        # 2. Vinculación con el cliente
-        # Si no se envió cliente explícito, se vincula automáticamente el cliente del proyecto
-        if not cliente:
-            cliente = obra.cliente
-            attrs["cliente"] = cliente
-        else:
-            # Si se envió cliente, debe coincidir con el cliente del proyecto
-            if cliente != obra.cliente:
+            if not cliente:
+                cliente = obra.cliente
+                attrs["cliente"] = cliente
+            elif cliente != obra.cliente:
                 raise serializers.ValidationError({
                     "cliente": "El cliente seleccionado no coincide con el cliente asociado al proyecto."
                 })
+        else:
+            # 2. Flujo nuevo (Presupuesto previo a la obra)
+            if not cliente:
+                raise serializers.ValidationError({"cliente": "Debe seleccionar un cliente para el presupuesto."})
 
         # 3. Validación de cliente activo
-        if cliente.soft_deleted or cliente.estado_cliente != Cliente.EstadoCliente.ACTIVO:
-            raise serializers.ValidationError({
-                "cliente": f"El cliente '{cliente.razon_social}' debe estar activo para registrar un presupuesto (estado actual: {cliente.estado_cliente})."
-            })
+        if cliente:
+            if cliente.soft_deleted or cliente.estado_cliente != Cliente.EstadoCliente.ACTIVO:
+                raise serializers.ValidationError({
+                    "cliente": f"El cliente '{cliente.razon_social}' debe estar activo para registrar un presupuesto (estado actual: {cliente.estado_cliente})."
+                })
 
         # 4. Generación automática del número de presupuesto si no se proporciona
         numero = attrs.get("numero_presupuesto")
         if not numero and not (self.instance and self.instance.numero_presupuesto):
+            anio = timezone.now().year
             correlativo = uuid.uuid4().hex[:6].upper()
-            attrs["numero_presupuesto"] = f"PRE-{obra.codigo_obra}-{correlativo}"
+            if obra and obra.codigo_obra:
+                attrs["numero_presupuesto"] = f"PRE-{obra.codigo_obra}-{correlativo}"
+            else:
+                attrs["numero_presupuesto"] = f"PRE-{anio}-{correlativo}"
 
         # 5. Cálculo coherente de montos (subtotal, IVA 19%, total)
         subtotal = attrs.get("subtotal")

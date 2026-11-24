@@ -755,8 +755,10 @@ export default function PanelAdministrativo() {
                           {p.numero_presupuesto}
                         </td>
                         <td>
-                          <div style={{ fontWeight: 600 }}>{p.obra_codigo}</div>
-                          <div className="text-muted" style={{ fontSize: '0.75rem' }}>{p.obra_nombre}</div>
+                          <div style={{ fontWeight: 600 }}>{p.obra_codigo || '—'}</div>
+                          <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+                            {p.obra_nombre || p.nombre_proyecto || 'Pendiente generación'}
+                          </div>
                         </td>
                         <td>
                           <div>{p.cliente_razon_social}</div>
