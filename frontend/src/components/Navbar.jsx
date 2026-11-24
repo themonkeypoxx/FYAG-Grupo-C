@@ -44,7 +44,7 @@ export default function Navbar() {
             </Link>
           )}
 
-          {esAdministrativo && (
+          {(esAdministrativo || esGerencial) && (
             <Link
               to="/vista-administrativo"
               className={`nav-link ${location.pathname === '/vista-administrativo' ? 'active' : ''}`}
@@ -86,6 +86,15 @@ export default function Navbar() {
               className={`nav-link ${location.pathname === '/usuarios' ? 'active' : ''}`}
             >
               Usuarios
+            </Link>
+          )}
+
+          {esGerencial && (
+            <Link
+              to="/auditoria"
+              className={`nav-link ${location.pathname === '/auditoria' ? 'active' : ''}`}
+            >
+              Auditoría
             </Link>
           )}
 

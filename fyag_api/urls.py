@@ -20,7 +20,12 @@ from django.urls import path, include
 # es para usar el custom token obtain en lugar del q viene x defecto en drf!!!!
 from fichas_obras.views import CustomTokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
-from fyag_mongoDB.views import (MaquinariaCatalogView, AsignarMaquinariaView, DashboardMongoAgregacionView,)
+from fyag_mongoDB.views import (
+    MaquinariaCatalogView,
+    AsignarMaquinariaView,
+    DashboardMongoAgregacionView,
+    AuditoriaLogsListView,
+)
 from fyag_pdf_back.views import presupuesto_pdf, factura_pdf, ResumenFinancieroPDFView
 
 urlpatterns = [
@@ -32,8 +37,10 @@ urlpatterns = [
     path('obras/fyag/v1/maquinarias/', MaquinariaCatalogView.as_view(), name='catalogo-maquinarias-v1'),
     path('obras/', include('fichas_obras.urls')),
     path('obras/fyag/v1/dashboard/mongo-agregacion/', DashboardMongoAgregacionView.as_view(), name='dashboard-mongo-agregacion'),
-    # PDF exports — fyag_pdf_back
+    # PDF exports - fyag_pdf_back
     path('obras/fyag/v1/presupuestos/<uuid:pk>/pdf/', presupuesto_pdf, name='presupuesto-pdf'),
     path('obras/fyag/v1/facturas/<uuid:pk>/pdf/', factura_pdf, name='factura-pdf'),
     path('obras/fyag/v1/resumen-financiero/pdf/', ResumenFinancieroPDFView.as_view(), name='resumen-financiero-pdf'),
+    # AUDITORIA 
+    path('obras/fyag/v1/auditoria/', AuditoriaLogsListView.as_view(), name='auditoria-logs'),
 ]

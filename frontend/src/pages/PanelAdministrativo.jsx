@@ -8,8 +8,11 @@ import ModalNuevaFactura from '../components/ModalNuevaFactura';
 import ModalRegistrarPago from '../components/ModalRegistrarPago';
 import ModalExportarPDF from '../components/ModalExportarPDF';
 import ModalCambioEstadoPago from '../components/ModalCambioEstadoPago';
+import ModalConfirmacion from '../components/ModalConfirmacion';
 
 import './PanelAdministrativo.css';
+
+
 
 // Formato de moneda CLP
 const formatearCLP = (monto) => {
@@ -44,6 +47,18 @@ export default function PanelAdministrativo() {
   const [presupuestoSeleccionadoId, setPresupuestoSeleccionadoId] = useState('');
   const [modalPago, setModalPago] = useState(null); // Factura seleccionada
   const [modalCambioEstado, setModalCambioEstado] = useState(null);
+  const [modalConfirmacion, setModalConfirmacion] = useState({
+    isOpen: false,
+    titulo: '',
+    mensaje: '',
+    onConfirmar: null,
+    tipo: 'primario',
+    textoConfirmar: 'Confirmar',
+    requiereMotivo: false,
+    labelMotivo: 'Motivo:',
+    placeholderMotivo: '',
+    cargando: false,
+  });
 
   // Clientes
   const [clientes, setClientes] = useState([]);
@@ -181,45 +196,68 @@ export default function PanelAdministrativo() {
   // -------------------------------------------------------------
   // HANDLERS: Aprobación y Rechazo de Presupuestos (Gerencia)
   // -------------------------------------------------------------
-  const handleAprobarPresupuesto = async (idPresupuesto, numero) => {
-    if (!window.confirm(`¿Confirma que desea APROBAR el presupuesto '${numero}' como Gerencia?`)) {
-      return;
-    }
-    try {
-      setProcesandoPresupuestoId(idPresupuesto);
-      await presupuestosService.aprobarPresupuesto(idPresupuesto);
-      setNotificacion({
-        tipo: 'exito',
-        mensaje: `Presupuesto '${numero}' aprobado exitosamente por Gerencia.`,
-      });
-      await cargarPresupuestos();
-    } catch (err) {
-      console.error('Error al aprobar presupuesto:', err);
-      const errMsg = err.response?.data?.detail || err.response?.data?.error || 'No se pudo aprobar el presupuesto.';
-      setNotificacion({ tipo: 'error', mensaje: errMsg });
-    } finally {
-      setProcesandoPresupuestoId(null);
-    }
+  const handleAprobarPresupuesto = (idPresupuesto, numero) => {
+    setModalConfirmacion({
+      isOpen: true,
+      titulo: 'Aprobar Presupuesto',
+      mensaje: `¿Confirma que desea APROBAR el presupuesto '${numero}' como Gerencia?`,
+      tipo: 'exito',
+      textoConfirmar: 'Aprobar Presupuesto',
+      requiereMotivo: false,
+      cargando: false,
+      onConfirmar: async () => {
+        try {
+          setModalConfirmacion((prev) => ({ ...prev, cargando: true }));
+          setProcesandoPresupuestoId(idPresupuesto);
+          await presupuestosService.aprobarPresupuesto(idPresupuesto);
+          setNotificacion({
+            tipo: 'exito',
+            mensaje: `Presupuesto '${numero}' aprobado exitosamente por Gerencia.`,
+          });
+          await cargarPresupuestos();
+        } catch (err) {
+          console.error('Error al aprobar presupuesto:', err);
+          const errMsg = err.response?.data?.detail || err.response?.data?.error || 'No se pudo aprobar el presupuesto.';
+          setNotificacion({ tipo: 'error', mensaje: errMsg });
+        } finally {
+          setProcesandoPresupuestoId(null);
+          setModalConfirmacion((prev) => ({ ...prev, isOpen: false, cargando: false }));
+        }
+      },
+    });
   };
 
-  const handleRechazarPresupuesto = async (idPresupuesto, numero) => {
-    const motivo = window.prompt(`Ingrese el motivo para RECHAZAR el presupuesto '${numero}':`, '');
-    if (motivo === null) return;
-    try {
-      setProcesandoPresupuestoId(idPresupuesto);
-      await presupuestosService.rechazarPresupuesto(idPresupuesto, motivo);
-      setNotificacion({
-        tipo: 'exito',
-        mensaje: `Presupuesto '${numero}' rechazado por Gerencia.`,
-      });
-      await cargarPresupuestos();
-    } catch (err) {
-      console.error('Error al rechazar presupuesto:', err);
-      const errMsg = err.response?.data?.detail || err.response?.data?.error || 'No se pudo rechazar el presupuesto.';
-      setNotificacion({ tipo: 'error', mensaje: errMsg });
-    } finally {
-      setProcesandoPresupuestoId(null);
-    }
+  const handleRechazarPresupuesto = (idPresupuesto, numero) => {
+    setModalConfirmacion({
+      isOpen: true,
+      titulo: 'Rechazar Presupuesto',
+      mensaje: `¿Está seguro de que desea rechazar el presupuesto '${numero}'? Ingrese el motivo correspondiente:`,
+      tipo: 'peligro',
+      textoConfirmar: 'Rechazar Presupuesto',
+      requiereMotivo: true,
+      labelMotivo: 'Motivo del rechazo *',
+      placeholderMotivo: 'Explique la razón del rechazo...',
+      cargando: false,
+      onConfirmar: async (motivoIngresado) => {
+        try {
+          setModalConfirmacion((prev) => ({ ...prev, cargando: true }));
+          setProcesandoPresupuestoId(idPresupuesto);
+          await presupuestosService.rechazarPresupuesto(idPresupuesto, motivoIngresado);
+          setNotificacion({
+            tipo: 'exito',
+            mensaje: `Presupuesto '${numero}' rechazado por Gerencia.`,
+          });
+          await cargarPresupuestos();
+        } catch (err) {
+          console.error('Error al rechazar presupuesto:', err);
+          const errMsg = err.response?.data?.detail || err.response?.data?.error || 'No se pudo rechazar el presupuesto.';
+          setNotificacion({ tipo: 'error', mensaje: errMsg });
+        } finally {
+          setProcesandoPresupuestoId(null);
+          setModalConfirmacion((prev) => ({ ...prev, isOpen: false, cargando: false }));
+        }
+      },
+    });
   };
 
   // -------------------------------------------------------------
@@ -314,6 +352,8 @@ export default function PanelAdministrativo() {
           💰 Presupuestos ({presupuestos.length})
         </button>
       </div>
+
+
 
       {/* ============================================================= */}
       {/* PESTAÑA 1: CLIENTES                                           */}
@@ -536,13 +576,12 @@ export default function PanelAdministrativo() {
                         </td>
                         <td>
                           <span
-                            className={`badge-status ${
-                              c.estado_cliente === 'Activo'
-                                ? 'badge-cliente-activo'
-                                : c.estado_cliente === 'Moroso'
-                                  ? 'badge-cliente-moroso'
-                                  : 'badge-cliente-inactivo'
-                            }`}
+                            className={`badge-status ${c.estado_cliente === 'Activo'
+                              ? 'badge-cliente-activo'
+                              : c.estado_cliente === 'Moroso'
+                                ? 'badge-cliente-moroso'
+                                : 'badge-cliente-inactivo'
+                              }`}
                           >
                             ● {c.estado_cliente}
                           </span>
@@ -769,13 +808,12 @@ export default function PanelAdministrativo() {
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <span
-                            className={`badge-status ${
-                              p.estado_presupuesto === 'Aprobado'
-                                ? 'badge-presupuesto-aprobado'
-                                : p.estado_presupuesto === 'Rechazado'
-                                  ? 'badge-presupuesto-rechazado'
-                                  : 'badge-presupuesto-pendiente'
-                            }`}
+                            className={`badge-status ${p.estado_presupuesto === 'Aprobado'
+                              ? 'badge-presupuesto-aprobado'
+                              : p.estado_presupuesto === 'Rechazado'
+                                ? 'badge-presupuesto-rechazado'
+                                : 'badge-presupuesto-pendiente'
+                              }`}
                           >
                             ● {p.estado_presupuesto}
                           </span>
@@ -873,6 +911,20 @@ export default function PanelAdministrativo() {
         factura={modalCambioEstado}
         onClose={() => setModalCambioEstado(null)}
         onEstadoActualizado={cargarFacturas}
+      />
+
+      <ModalConfirmacion
+        isOpen={modalConfirmacion.isOpen}
+        titulo={modalConfirmacion.titulo}
+        mensaje={modalConfirmacion.mensaje}
+        tipo={modalConfirmacion.tipo}
+        textoConfirmar={modalConfirmacion.textoConfirmar}
+        requiereMotivo={modalConfirmacion.requiereMotivo}
+        labelMotivo={modalConfirmacion.labelMotivo}
+        placeholderMotivo={modalConfirmacion.placeholderMotivo}
+        cargando={modalConfirmacion.cargando}
+        onClose={() => setModalConfirmacion((prev) => ({ ...prev, isOpen: false, cargando: false }))}
+        onConfirmar={modalConfirmacion.onConfirmar}
       />
     </main>
   );

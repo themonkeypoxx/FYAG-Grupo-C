@@ -39,10 +39,6 @@ def get_audit_collection():
 
 
 
-####### Simulación de catálogo d maquinarias
-####### al final decidí implementarlo, despues en el informe solo
-####### debemos justificar el cambio del registro de auditoría a MongoDB
-#     (lo haré yo) - Ismael
 
 def inicializar_catalogo_maquinarias():
     if maquinarias_collection.count_documents({}) == 0:
