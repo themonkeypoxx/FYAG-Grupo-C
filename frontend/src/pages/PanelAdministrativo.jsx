@@ -11,6 +11,8 @@ import ModalCambioEstadoPago from '../components/ModalCambioEstadoPago';
 
 import './PanelAdministrativo.css';
 
+
+
 // Formato de moneda CLP
 const formatearCLP = (monto) => {
   return new Intl.NumberFormat('es-CL', {
@@ -315,6 +317,8 @@ export default function PanelAdministrativo() {
         </button>
       </div>
 
+
+
       {/* ============================================================= */}
       {/* PESTAÑA 1: CLIENTES                                           */}
       {/* ============================================================= */}
@@ -536,13 +540,12 @@ export default function PanelAdministrativo() {
                         </td>
                         <td>
                           <span
-                            className={`badge-status ${
-                              c.estado_cliente === 'Activo'
-                                ? 'badge-cliente-activo'
-                                : c.estado_cliente === 'Moroso'
-                                  ? 'badge-cliente-moroso'
-                                  : 'badge-cliente-inactivo'
-                            }`}
+                            className={`badge-status ${c.estado_cliente === 'Activo'
+                              ? 'badge-cliente-activo'
+                              : c.estado_cliente === 'Moroso'
+                                ? 'badge-cliente-moroso'
+                                : 'badge-cliente-inactivo'
+                              }`}
                           >
                             ● {c.estado_cliente}
                           </span>
@@ -769,13 +772,12 @@ export default function PanelAdministrativo() {
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <span
-                            className={`badge-status ${
-                              p.estado_presupuesto === 'Aprobado'
-                                ? 'badge-presupuesto-aprobado'
-                                : p.estado_presupuesto === 'Rechazado'
-                                  ? 'badge-presupuesto-rechazado'
-                                  : 'badge-presupuesto-pendiente'
-                            }`}
+                            className={`badge-status ${p.estado_presupuesto === 'Aprobado'
+                              ? 'badge-presupuesto-aprobado'
+                              : p.estado_presupuesto === 'Rechazado'
+                                ? 'badge-presupuesto-rechazado'
+                                : 'badge-presupuesto-pendiente'
+                              }`}
                           >
                             ● {p.estado_presupuesto}
                           </span>

@@ -564,7 +564,7 @@ export default function NavbarNotificaciones({ esGerencial, esSupervisor, esTecn
               </div>
             )}
 
-            {/* SECCIÓN 3: TÉCNICO (NOTIFICACIONES DE SUS OBRAS) */}
+            {/* SECCIÓN 3: TÉCNICO */}
             {seccionActiva === 'tecnico' && (
               <div>
                 {notifsTecnico.length === 0 ? (
@@ -637,15 +637,6 @@ export default function NavbarNotificaciones({ esGerencial, esSupervisor, esTecn
               backgroundColor: 'var(--surface-alt, #f8fafc)',
             }}
           >
-            {seccionActiva === 'presupuestos' && (
-              <Link
-                to="/vista-administrativo"
-                onClick={() => setMostrarDropdown(false)}
-                style={{ fontSize: '0.75rem', color: 'var(--primary, #2563eb)', fontWeight: 600, textDecoration: 'none' }}
-              >
-                Ir a Gestión de Presupuestos →
-              </Link>
-            )}
           </div>
         </div>
       )}
