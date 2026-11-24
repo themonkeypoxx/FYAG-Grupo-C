@@ -5,6 +5,7 @@ import GraficoDashObras from '../components/GraficoDashObras';
 import ObraCard from '../components/ObraCard';
 import ModalCambiarEstado from '../components/ModalCambiarEstado';
 import ModalMateriales from '../components/ModalMateriales';
+import ModalConfirmacion from '../components/ModalConfirmacion';
 import obrasService from '../Servicios/obrasService';
 
 export default function Dashboard() {
@@ -37,6 +38,15 @@ export default function Dashboard() {
   const [asignacionesExistentes, setAsignacionesExistentes] = useState([]);
   const [catalogoMaquinarias, setCatalogoMaquinarias] = useState([]);
   const [obraMateriales, setObraMateriales] = useState(null);
+  const [modalConfirmacion, setModalConfirmacion] = useState({
+    isOpen: false,
+    titulo: '',
+    mensaje: '',
+    onConfirmar: null,
+    tipo: 'peligro',
+    textoConfirmar: 'Confirmar',
+    cargando: false,
+  });
 
   useEffect(() => {
     const notificacionRecibida = location.state?.notificacion;
@@ -228,15 +238,27 @@ export default function Dashboard() {
     }
   };
 
-  const handleDesasignarTecnico = async (obra, tecnicoId, tecnicoNombre) => {
-    if (!window.confirm(`¿Desasignar a ${tecnicoNombre} de ${obra.codigo_obra}?`)) return;
-    try {
-      await obrasService.desasignarTecnico(obra.id_obra, tecnicoId);
-      setNotificacion({ tipo: 'exito', mensaje: `${tecnicoNombre} fue desasignado de ${obra.codigo_obra}.` });
-      await cargarObras();
-    } catch (err) {
-      setNotificacion({ tipo: 'error', mensaje: err.response?.data?.detail || 'No se pudo desasignar al técnico.' });
-    }
+  const handleDesasignarTecnico = (obra, tecnicoId, tecnicoNombre) => {
+    setModalConfirmacion({
+      isOpen: true,
+      titulo: 'Confirmar Desasignación',
+      mensaje: `¿Está seguro de que desea desasignar a ${tecnicoNombre} de la obra ${obra.codigo_obra}?`,
+      tipo: 'peligro',
+      textoConfirmar: 'Desasignar Técnico',
+      cargando: false,
+      onConfirmar: async () => {
+        try {
+          setModalConfirmacion((prev) => ({ ...prev, cargando: true }));
+          await obrasService.desasignarTecnico(obra.id_obra, tecnicoId);
+          setNotificacion({ tipo: 'exito', mensaje: `${tecnicoNombre} fue desasignado de ${obra.codigo_obra}.` });
+          await cargarObras();
+        } catch (err) {
+          setNotificacion({ tipo: 'error', mensaje: err.response?.data?.detail || 'No se pudo desasignar al técnico.' });
+        } finally {
+          setModalConfirmacion({ isOpen: false, titulo: '', mensaje: '', onConfirmar: null, cargando: false });
+        }
+      },
+    });
   };
 
   const handleConfirmarTransicion = async (nuevoEstadoCodigo, motivo) => {
@@ -453,6 +475,16 @@ export default function Dashboard() {
         obra={obraMateriales ? obras.find((o) => o.id_obra === obraMateriales.id_obra) || obraMateriales : null}
         onClose={() => setObraMateriales(null)}
         onCambio={cargarObras}
+      />
+      <ModalConfirmacion
+        isOpen={modalConfirmacion.isOpen}
+        titulo={modalConfirmacion.titulo}
+        mensaje={modalConfirmacion.mensaje}
+        tipo={modalConfirmacion.tipo}
+        textoConfirmar={modalConfirmacion.textoConfirmar}
+        cargando={modalConfirmacion.cargando}
+        onClose={() => setModalConfirmacion({ isOpen: false, titulo: '', mensaje: '', onConfirmar: null, cargando: false })}
+        onConfirmar={modalConfirmacion.onConfirmar}
       />
       {obraEditando && (
         <div

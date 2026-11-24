@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import presupuestosService from '../Servicios/presupuestosService';
 import obrasService from '../Servicios/obrasService';
+import ModalConfirmacion from './ModalConfirmacion';
 
 const formatearCLP = (monto) => {
   return new Intl.NumberFormat('es-CL', {
@@ -25,6 +26,20 @@ export default function NavbarNotificaciones({ esGerencial, esSupervisor, esTecn
 
   // Estados de Técnico (Notificaciones de Obras)
   const [notifsTecnico, setNotifsTecnico] = useState([]);
+
+  // Modal de confirmación para rechazar presupuesto o solicitud
+  const [modalConfirmacion, setModalConfirmacion] = useState({
+    isOpen: false,
+    titulo: '',
+    mensaje: '',
+    onConfirmar: null,
+    tipo: 'peligro',
+    textoConfirmar: 'Confirmar',
+    requiereMotivo: false,
+    labelMotivo: 'Motivo:',
+    placeholderMotivo: '',
+    cargando: false,
+  });
 
   // Pestaña activa en el dropdown si tiene múltiples roles
   const [seccionActiva, setSeccionActiva] = useState(
@@ -100,18 +115,32 @@ export default function NavbarNotificaciones({ esGerencial, esSupervisor, esTecn
     }
   };
 
-  const handleRechazarPresupuesto = async (n) => {
-    const motivo = window.prompt(`Ingrese el motivo del rechazo para el presupuesto ${n.presupuesto_numero}:`, '');
-    if (motivo === null) return;
-    try {
-      setProcesandoPresupuestoId(n.id);
-      await presupuestosService.rechazarPresupuesto(n.presupuesto, motivo);
-      await cargarNotificaciones();
-    } catch (err) {
-      alert(err.response?.data?.detail || err.response?.data?.error || 'No se pudo rechazar el presupuesto.');
-    } finally {
-      setProcesandoPresupuestoId(null);
-    }
+  const handleRechazarPresupuesto = (n) => {
+    setModalConfirmacion({
+      isOpen: true,
+      titulo: 'Rechazar Presupuesto',
+      mensaje: `¿Confirma que desea rechazar el presupuesto ${n.presupuesto_numero}? Ingrese el motivo correspondiente:`,
+      tipo: 'peligro',
+      textoConfirmar: 'Rechazar Presupuesto',
+      requiereMotivo: true,
+      labelMotivo: 'Motivo del rechazo *',
+      placeholderMotivo: 'Explique la razón del rechazo...',
+      cargando: false,
+      onConfirmar: async (motivo) => {
+        try {
+          setModalConfirmacion((prev) => ({ ...prev, cargando: true }));
+          setProcesandoPresupuestoId(n.id);
+          await presupuestosService.rechazarPresupuesto(n.presupuesto, motivo);
+          await cargarNotificaciones();
+          setModalConfirmacion((prev) => ({ ...prev, isOpen: false, cargando: false }));
+        } catch (err) {
+          alert(err.response?.data?.detail || err.response?.data?.error || 'No se pudo rechazar el presupuesto.');
+        } finally {
+          setProcesandoPresupuestoId(null);
+          setModalConfirmacion((prev) => ({ ...prev, cargando: false }));
+        }
+      },
+    });
   };
 
   const handleMarcarPresupuestoLeida = async (id) => {
@@ -135,13 +164,40 @@ export default function NavbarNotificaciones({ esGerencial, esSupervisor, esTecn
   // -------------------------------------------------------------
   // ACCIONES DE SUPERVISOR (SOLICITUDES DE TÉCNICOS)
   // -------------------------------------------------------------
-  const handleResolverSolicitud = async (solicitud, accion) => {
-    let respuesta = '';
+  const handleResolverSolicitud = (solicitud, accion) => {
     if (accion === 'RECHAZAR') {
-      const promptResp = window.prompt(`Ingrese el motivo para rechazar la solicitud de ${solicitud.tecnico_nombre}:`, '');
-      if (promptResp === null) return;
-      respuesta = promptResp;
+      setModalConfirmacion({
+        isOpen: true,
+        titulo: 'Rechazar Solicitud',
+        mensaje: `Ingrese el motivo para rechazar la solicitud de ${solicitud.tecnico_nombre}:`,
+        tipo: 'peligro',
+        textoConfirmar: 'Rechazar Solicitud',
+        requiereMotivo: true,
+        labelMotivo: 'Motivo del rechazo *',
+        placeholderMotivo: 'Explique la razón del rechazo...',
+        cargando: false,
+        onConfirmar: async (respuesta) => {
+          try {
+            setModalConfirmacion((prev) => ({ ...prev, cargando: true }));
+            setProcesandoSolicitudId(solicitud.id_solicitud);
+            await obrasService.resolverSolicitudCambio(solicitud.id_solicitud, accion, respuesta);
+            await cargarNotificaciones();
+            setModalConfirmacion((prev) => ({ ...prev, isOpen: false, cargando: false }));
+          } catch (err) {
+            alert(err.response?.data?.detail || err.response?.data?.error || 'No se pudo resolver la solicitud.');
+          } finally {
+            setProcesandoSolicitudId(null);
+            setModalConfirmacion((prev) => ({ ...prev, cargando: false }));
+          }
+        },
+      });
+      return;
     }
+
+    ejecutarResolucion(solicitud, accion, '');
+  };
+
+  const ejecutarResolucion = async (solicitud, accion, respuesta) => {
     try {
       setProcesandoSolicitudId(solicitud.id_solicitud);
       await obrasService.resolverSolicitudCambio(solicitud.id_solicitud, accion, respuesta);
@@ -640,6 +696,21 @@ export default function NavbarNotificaciones({ esGerencial, esSupervisor, esTecn
           </div>
         </div>
       )}
+
+      {/* Modal de confirmación para rechazos */}
+      <ModalConfirmacion
+        isOpen={modalConfirmacion.isOpen}
+        titulo={modalConfirmacion.titulo}
+        mensaje={modalConfirmacion.mensaje}
+        tipo={modalConfirmacion.tipo}
+        textoConfirmar={modalConfirmacion.textoConfirmar}
+        requiereMotivo={modalConfirmacion.requiereMotivo}
+        labelMotivo={modalConfirmacion.labelMotivo}
+        placeholderMotivo={modalConfirmacion.placeholderMotivo}
+        cargando={modalConfirmacion.cargando}
+        onClose={() => setModalConfirmacion((prev) => ({ ...prev, isOpen: false, cargando: false }))}
+        onConfirmar={modalConfirmacion.onConfirmar}
+      />
     </div>
   );
 }
