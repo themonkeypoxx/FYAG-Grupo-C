@@ -396,7 +396,7 @@ export default function NavbarNotificaciones({ esGerencial, esSupervisor, esTecn
                       </div>
 
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', marginBottom: '0.5rem' }}>
-                        Cliente: <strong>{n.cliente_nombre}</strong> · Obra: <strong>{n.obra_codigo}</strong> · Monto: <strong>{formatearCLP(n.presupuesto_total)}</strong>
+                        Cliente: <strong>{n.cliente_nombre}</strong>{n.obra_codigo ? <> · Obra: <strong>{n.obra_codigo}</strong></> : <> · <em>(Crea obra al aprobar)</em></>} · Monto: <strong>{formatearCLP(n.presupuesto_total)}</strong>
                       </div>
 
                       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.4rem' }}>

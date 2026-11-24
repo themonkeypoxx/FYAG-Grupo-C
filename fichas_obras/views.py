@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+import uuid
 
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
@@ -7,6 +8,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 
 from rest_framework import mixins
 from .serializer import UsuarioSerializer, UserModel
@@ -49,6 +51,8 @@ from fyag_mongoDB.servicio_maquinarias import (
     liberar_maquina,
     obtener_maquinas_por_obra,
 )
+
+from django.db import transaction
 
 
 def notificar_tecnicos_de_obra(obra, estado_codigo):
@@ -101,10 +105,6 @@ def notificar_gerentes_presupuesto(presupuesto, tipo="CREADO", mensaje=None):
 
 class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsSupervisor | EsAdministrativo]
-    """
-    CRUD principal de Obras con clasificación por tipo de servicio,
-    búsqueda, filtros y máquina de estados operativos.
-    """
     serializer_class = Obras_Serializer
 
     def get_queryset(self):
@@ -124,7 +124,7 @@ class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
 
         params = self.request.query_params
 
-        # 1. Filtro por Tipo de Servicio (por ID o código)
+        #Filtro por Tipo de Servicio (por ID o código)
         tipo_param = params.get("tipo_servicio") or params.get("tipo_servicio_codigo")
         if tipo_param:
             if str(tipo_param).isdigit():
@@ -132,7 +132,7 @@ class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
             else:
                 queryset = queryset.filter(tipo_servicio__codigo__iexact=tipo_param)
 
-        # 2. Filtro por Estado Operativo (por ID o código)
+        #Filtro por Estado Operativo (por ID o código)
         estado_param = params.get("estado") or params.get("estado_obra") or params.get("estado_codigo")
         if estado_param:
             if str(estado_param).isdigit():
@@ -140,14 +140,14 @@ class Crud_obras(AuditModelViewSetMixin, viewsets.ModelViewSet):
             else:
                 queryset = queryset.filter(estado_obra__codigo_estado__iexact=estado_param)
 
-        # 3. Filtro por Cliente
+        #Filtro por Cliente
         cliente_param = params.get("cliente")
         if cliente_param:
             queryset = queryset.filter(
                 Q(cliente__id_cliente=cliente_param) | Q(cliente__rut_empresa__iexact=cliente_param)
             )
 
-        # 4. Búsqueda por texto (código de obra, nombre, ubicación o cliente)
+        #Búsqueda por texto (código de obra, nombre, ubicación o cliente)
         search = params.get("search")
         if search:
             queryset = queryset.filter(
@@ -633,37 +633,74 @@ class PresupuestoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         presupuesto = serializer.save(creador=self.request.user)
+        destino = presupuesto.obra.codigo_obra if presupuesto.obra else (presupuesto.nombre_proyecto or (presupuesto.cliente.razon_social if presupuesto.cliente else "nuevo proyecto"))
         notificar_gerentes_presupuesto(
             presupuesto=presupuesto,
             tipo="CREADO",
-            mensaje=f"Nuevo presupuesto {presupuesto.numero_presupuesto} registrado para {presupuesto.obra.codigo_obra} por ${presupuesto.monto_total:,.0f}."
+            mensaje=f"Nuevo presupuesto {presupuesto.numero_presupuesto} registrado para {destino} por ${presupuesto.monto_total:,.0f}."
         )
 
     @action(detail=True, methods=["post"], url_path="aprobar", permission_classes=[EsGerencial])
     def aprobar(self, request, pk=None):
         presupuesto = self.get_object()
-        presupuesto.estado_presupuesto = Presupuesto.EstadoPresupuesto.APROBADO
-        presupuesto.aprobador_gerencia = request.user
-        presupuesto.save(update_fields=["estado_presupuesto", "aprobador_gerencia"])
 
-        NotificacionPresupuesto.objects.filter(
-            usuario=request.user, presupuesto=presupuesto
-        ).update(leida=True)
+        with transaction.atomic():
+            # Si no hay obra asociada, se crea automáticamente la obra en estado PENDIENTE
+            if not presupuesto.obra:
+                anio = timezone.now().year
+                cod_sufijo = uuid.uuid4().hex[:6].upper()
+                codigo_obra = f"OBRA-{anio}-{cod_sufijo}"
+                estado_pendiente, _ = EstadoObra.objects.get_or_create(
+                    codigo_estado="PENDIENTE",
+                    defaults={"descripcion": "Pendiente", "color_hex": "#6b7280"}
+                )
 
-        registrar_evento(
-            request=request,
-            accion="PRESUPUESTO_APROBADO",
-            recurso="Presupuesto",
-            recurso_id=presupuesto.id_presupuesto,
-            detalles={
-                "numero_presupuesto": presupuesto.numero_presupuesto,
-                "obra": presupuesto.obra.codigo_obra,
-                "aprobado_por": request.user.username,
-            },
-        )
+                tipo_servicio = presupuesto.tipo_servicio
+                if not tipo_servicio:
+                    tipo_servicio = TipoServicio.objects.first()
+
+                nueva_obra = Obra.objects.create(
+                    codigo_obra=codigo_obra,
+                    cliente=presupuesto.cliente,
+                    tipo_servicio=tipo_servicio,
+                    estado_obra=estado_pendiente,
+                    supervisor=presupuesto.supervisor_asignado or request.user,
+                    nombre_obra=presupuesto.nombre_proyecto or f"Obra {presupuesto.numero_presupuesto}",
+                    ubicacion_faena=presupuesto.ubicacion_faena or "Por definir",
+                    fecha_inicio=presupuesto.fecha_estimada_inicio or timezone.now().date(),
+                    fecha_termino_estimada=presupuesto.fecha_estimada_termino,
+                    costo_estimado=presupuesto.subtotal,
+                )
+                presupuesto.obra = nueva_obra
+
+            presupuesto.estado_presupuesto = Presupuesto.EstadoPresupuesto.APROBADO
+            presupuesto.aprobador_gerencia = request.user
+            presupuesto.save(update_fields=["estado_presupuesto", "aprobador_gerencia", "obra"])
+
+            NotificacionPresupuesto.objects.filter(
+                usuario=request.user, presupuesto=presupuesto
+            ).update(leida=True)
+
+            obra_codigo = presupuesto.obra.codigo_obra if presupuesto.obra else ""
+            registrar_evento(
+                request=request,
+                accion="PRESUPUESTO_APROBADO",
+                recurso="Presupuesto",
+                recurso_id=presupuesto.id_presupuesto,
+                detalles={
+                    "numero_presupuesto": presupuesto.numero_presupuesto,
+                    "obra": obra_codigo,
+                    "aprobado_por": request.user.username,
+                },
+            )
+
         return Response({
-            "mensaje": f"Presupuesto {presupuesto.numero_presupuesto} aprobado exitosamente.",
+            "mensaje": f"Presupuesto {presupuesto.numero_presupuesto} aprobado exitosamente. Obra asociada: {presupuesto.obra.codigo_obra}.",
             "presupuesto": self.get_serializer(presupuesto).data,
+            "obra_creada": {
+                "id": str(presupuesto.obra.id_obra),
+                "codigo": presupuesto.obra.codigo_obra,
+            }
         }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="rechazar", permission_classes=[EsGerencial])
@@ -678,6 +715,7 @@ class PresupuestoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
             usuario=request.user, presupuesto=presupuesto
         ).update(leida=True)
 
+        obra_codigo = presupuesto.obra.codigo_obra if presupuesto.obra else "Sin obra"
         registrar_evento(
             request=request,
             accion="PRESUPUESTO_RECHAZADO",
@@ -685,7 +723,7 @@ class PresupuestoViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
             recurso_id=presupuesto.id_presupuesto,
             detalles={
                 "numero_presupuesto": presupuesto.numero_presupuesto,
-                "obra": presupuesto.obra.codigo_obra,
+                "obra": obra_codigo,
                 "motivo": motivo,
                 "rechazado_por": request.user.username,
             },
@@ -733,6 +771,14 @@ class FacturaViewSet(AuditModelViewSetMixin, viewsets.ModelViewSet):
     permission_classes = [EsGerencial | EsAdministrativo]
     serializer_class = FacturaSerializer
     queryset = Factura.objects.select_related("presupuesto", "cliente").filter(soft_deleted=False).order_by("-fecha_emision")
+
+
+    def perform_create(self, serializer):
+        presupuesto = serializer.validated_data["presupuesto"]
+        if presupuesto.estado_presupuesto != Presupuesto.EstadoPresupuesto.APROBADO:
+            raise ValidationError("No se puede facturar un presupuesto no aprobado por Gerencia.")
+        serializer.save()
+
 
     @action(detail=True, methods=["post"], url_path="actualizar-estado-pago")
     def actualizar_estado_pago(self, request, pk=None):
@@ -975,8 +1021,12 @@ class AsignacionMaterialViewSet(viewsets.ModelViewSet):
 
 class UsuarioViewSet(AuditModelViewSetMixin, mixins.ListModelMixin,
                      mixins.CreateModelMixin, viewsets.GenericViewSet):
-    """Listar y crear usuarios. Solo el rol Gerencia puede usarlo."""
-    permission_classes = [EsGerencial]
+    """Listar y crear usuarios. Solo el rol Gerencia puede crear, pero Administrativo y Supervisor pueden listar."""
     serializer_class = UsuarioSerializer
     recurso_nombre = "Usuario"
     queryset = UserModel.objects.prefetch_related("groups").order_by("-date_joined")
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [(EsGerencial | EsAdministrativo | EsSupervisor)()]
+        return [EsGerencial()]

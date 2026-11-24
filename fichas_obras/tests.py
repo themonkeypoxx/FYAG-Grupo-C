@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -1367,4 +1368,143 @@ class BloqueoFinalizacionObraFacturaPendienteTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.obra.refresh_from_db()
         self.assertEqual(self.obra.estado_obra.codigo_estado, "FINALIZADA")
+
+
+class FlujoCreacionPresupuestoObraFacturaTests(TestCase):
+    """
+    Pruebas para el nuevo flujo:
+    1. Administrador/Finanzas crea presupuesto sin obra previa.
+    2. Facturación bloqueada mientras presupuesto no esté aprobado por Gerencia.
+    3. Gerencia aprueba presupuesto -> Se genera automáticamente la Obra en estado PENDIENTE.
+    4. Facturación habilitada tras aprobación.
+    """
+    def setUp(self):
+        self.client = APIClient()
+
+        self.grupo_gerencial, _ = Group.objects.get_or_create(name="Gerencial")
+        self.grupo_admin, _ = Group.objects.get_or_create(name="Administrativo")
+        self.grupo_supervisor, _ = Group.objects.get_or_create(name="Supervisor")
+
+        self.gerente = User.objects.create_user(
+            username="gerente_flujo", password="password123", email="gerente@empresa.cl"
+        )
+        self.gerente.groups.add(self.grupo_gerencial)
+
+        self.admin = User.objects.create_user(
+            username="admin_flujo", password="password123", email="admin@empresa.cl"
+        )
+        self.admin.groups.add(self.grupo_admin)
+
+        self.supervisor = User.objects.create_user(
+            username="sup_flujo", password="password123", email="sup@empresa.cl"
+        )
+        self.supervisor.groups.add(self.grupo_supervisor)
+
+        self.tipo_servicio, _ = TipoServicio.objects.get_or_create(
+            codigo="CLIMA", defaults={"nombre_servicio": "Climatización", "descripcion": "Servicio HVAC"}
+        )
+        self.estado_pendiente, _ = EstadoObra.objects.get_or_create(
+            codigo_estado="PENDIENTE", defaults={"descripcion": "Pendiente", "color_hex": "#6b7280"}
+        )
+
+        self.cliente = Cliente.objects.create(
+            rut_empresa="77.999.888-1",
+            razon_social="Inmobiliaria Flujo Test SpA",
+            direccion_matriz="Av. Costanera 100",
+            estado_cliente=Cliente.EstadoCliente.ACTIVO
+        )
+
+    def test_creacion_presupuesto_sin_obra_inicial(self):
+        """Admin puede crear un presupuesto sin obra previa indicando datos preliminares del proyecto."""
+        self.client.force_authenticate(user=self.admin)
+        url = "/obras/fyag/v1/presupuestos/"
+        payload = {
+            "cliente": self.cliente.id_cliente,
+            "nombre_proyecto": "Instalación HVAC Torre Nueva",
+            "tipo_servicio": self.tipo_servicio.id_tipo_servicio,
+            "ubicacion_faena": "Av. Costanera 100, Santiago",
+            "subtotal": "5000000.00",
+            "estado_presupuesto": "Pendiente_Aprobacion"
+        }
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(res.data["obra"])
+        self.assertEqual(res.data["estado_presupuesto"], "Pendiente_Aprobacion")
+        self.assertTrue(res.data["numero_presupuesto"].startswith(f"PRE-{timezone.now().year}"))
+
+    def test_bloqueo_factura_si_presupuesto_no_esta_aprobado(self):
+        """No se puede emitir una factura para un presupuesto en estado Pendiente o Borrador."""
+        presupuesto = Presupuesto.objects.create(
+            cliente=self.cliente,
+            creador=self.admin,
+            nombre_proyecto="Instalación Clima",
+            subtotal=Decimal("2000000"),
+            monto_iva=Decimal("380000"),
+            monto_total=Decimal("2380000"),
+            estado_presupuesto=Presupuesto.EstadoPresupuesto.PENDIENTE_APROBACION,
+            numero_presupuesto="PRE-TEST-BLOQ-01"
+        )
+        self.client.force_authenticate(user=self.admin)
+        url = "/obras/fyag/v1/facturas/"
+        payload = {
+            "folio_factura": "FAC-BLOQ-PRE-01",
+            "presupuesto": str(presupuesto.id_presupuesto),
+            "cliente": self.cliente.id_cliente,
+            "fecha_emision": "2026-03-01",
+            "fecha_vencimiento": "2026-03-31",
+            "monto_total": "2380000.00",
+            "estado_pago": "Pendiente"
+        }
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("No se puede facturar un presupuesto no aprobado", str(res.data))
+
+    def test_aprobacion_gerencial_crea_obra_automatica_y_habilita_facturacion(self):
+        """Al aprobar Gerencia, se crea automáticamente la Obra en estado PENDIENTE y se puede facturar."""
+        presupuesto = Presupuesto.objects.create(
+            cliente=self.cliente,
+            creador=self.admin,
+            tipo_servicio=self.tipo_servicio,
+            nombre_proyecto="Proyecto Integral Eléctrico",
+            ubicacion_faena="Providencia 456",
+            supervisor_asignado=self.supervisor,
+            fecha_estimada_inicio=date(2026, 4, 1),
+            fecha_estimada_termino=date(2026, 6, 1),
+            subtotal=Decimal("3000000"),
+            monto_iva=Decimal("570000"),
+            monto_total=Decimal("3570000"),
+            estado_presupuesto=Presupuesto.EstadoPresupuesto.PENDIENTE_APROBACION,
+            numero_presupuesto="PRE-TEST-AUTO-01"
+        )
+        self.assertIsNone(presupuesto.obra)
+
+        # 1. Gerente aprueba el presupuesto
+        self.client.force_authenticate(user=self.gerente)
+        url_aprobar = f"/obras/fyag/v1/presupuestos/{presupuesto.id_presupuesto}/aprobar/"
+        res_aprobar = self.client.post(url_aprobar)
+        self.assertEqual(res_aprobar.status_code, status.HTTP_200_OK)
+
+        presupuesto.refresh_from_db()
+        self.assertEqual(presupuesto.estado_presupuesto, Presupuesto.EstadoPresupuesto.APROBADO)
+        self.assertIsNotNone(presupuesto.obra)
+        self.assertEqual(presupuesto.obra.nombre_obra, "Proyecto Integral Eléctrico")
+        self.assertEqual(presupuesto.obra.estado_obra.codigo_estado, "PENDIENTE")
+        self.assertEqual(presupuesto.obra.supervisor, self.supervisor)
+        self.assertEqual(presupuesto.obra.ubicacion_faena, "Providencia 456")
+
+        # 2. Facturación habilitada tras aprobación
+        self.client.force_authenticate(user=self.admin)
+        url_factura = "/obras/fyag/v1/facturas/"
+        payload_factura = {
+            "folio_factura": "FAC-AUTO-OK-01",
+            "presupuesto": str(presupuesto.id_presupuesto),
+            "cliente": self.cliente.id_cliente,
+            "fecha_emision": "2026-04-02",
+            "fecha_vencimiento": "2026-05-02",
+            "monto_total": "3570000.00",
+            "estado_pago": "Pendiente"
+        }
+        res_factura = self.client.post(url_factura, payload_factura, format="json")
+        self.assertEqual(res_factura.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res_factura.data["folio_factura"], "FAC-AUTO-OK-01")
 

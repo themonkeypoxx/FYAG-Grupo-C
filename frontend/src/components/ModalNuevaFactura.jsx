@@ -21,6 +21,11 @@ export default function ModalNuevaFactura({
   const [guardandoFactura, setGuardandoFactura] = useState(false);
   const [mensajeFactura, setMensajeFactura] = useState(null);
 
+  // Filtrar únicamente los presupuestos aprobados por Gerencia y sin factura previa
+  const presupuestosFacturables = presupuestosDisponibles.filter(
+    (p) => (p.estado_presupuesto === 'Aprobado' || p.estado_presupuesto === 'APROBADO') && !p.factura_asociada
+  );
+
   const handlePresupuestoSeleccionado = (presupuestoId) => {
     const pres = presupuestosDisponibles.find((p) => p.id_presupuesto === presupuestoId);
     if (pres) {
@@ -126,12 +131,15 @@ export default function ModalNuevaFactura({
               onChange={(e) => handlePresupuestoSeleccionado(e.target.value)}
               required
             >
-              <option value="">— Seleccione un presupuesto —</option>
-              {presupuestosDisponibles.map((p) => (
+              <option value="">— Seleccione un presupuesto aprobado —</option>
+              {presupuestosFacturables.map((p) => (
                 <option key={p.id_presupuesto} value={p.id_presupuesto}>
                   {p.numero_presupuesto} — {p.cliente_razon_social} ({formatearCLP ? formatearCLP(p.monto_total) : p.monto_total})
                 </option>
               ))}
+              {presupuestosFacturables.length === 0 && (
+                <option value="" disabled>No hay presupuestos aprobados pendientes de facturación</option>
+              )}
             </select>
           </div>
 
