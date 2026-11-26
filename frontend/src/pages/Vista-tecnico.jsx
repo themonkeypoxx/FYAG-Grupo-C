@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import obrasService from '../Servicios/obrasService';
-import AuthService from '../Servicios/AuthService';
+import authService from '../Servicios/authService';
 
 const fechaLocal = (fecha) => {
   const valor = new Date(fecha);

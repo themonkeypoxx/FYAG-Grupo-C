@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import authService from '../Servicios/AuthService';
+import authService from '../Servicios/authService';
 
 export default function ObraCard({ obra, onSolicitarTransicion, onAsignarTecnico, onDesasignarTecnico, onEditarObra, onGestionarMateriales }) {
   const transiciones = obra.transiciones_posibles || [];
